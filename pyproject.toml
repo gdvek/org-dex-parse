@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "org-dex-parse"
+version = "0.1.0"
+description = "Parse org-mode files into structured data for the org-dex indexing system"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.11"
+dependencies = [
+    "orgparse>=0.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]

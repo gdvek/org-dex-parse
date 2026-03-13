@@ -1,5 +1,5 @@
 #+title: org-dex-parse
-#+author: Gabriele De Vecchi
+#+author: Gabriele Della Vecchia
 #+startup: overview
 
 Org-mode parsing library for [[https://github.com/gdvek/org-dex][org-dex]].  Transforms org files into structured

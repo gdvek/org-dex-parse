@@ -1,0 +1,17 @@
+# Emacs
+*.elc
+*~
+\#*\#
+.dir-locals.el
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Project docs (symlinks to org-dex-parse-project, tracked separately)
+project/
+CLAUDE.md

@@ -1,0 +1,14 @@
+#+title: org-dex-parse
+#+author: Gabriele De Vecchi
+
+* org-dex-parse
+
+Parse org-mode files into structured data for the org-dex indexing system.
+
+** Status
+
+Early development. Not yet usable.
+
+** License
+
+GPL-3.0-or-later

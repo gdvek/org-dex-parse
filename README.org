@@ -123,6 +123,7 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
   │    .exclude_drawers                                                │
   │    .exclude_blocks                                                 │
   │    .exclude_properties                                             │
+  │    .created_property          default "CREATED"                   │
   │                                                                    │
   │  Data types                                                        │
   │  ──────────                                                        │

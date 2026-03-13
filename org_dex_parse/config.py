@@ -32,6 +32,13 @@ class Config:
     :arg exclude_properties: Property names to omit from the properties
         tuple.  Case-insensitive — normalized to lowercase in
         ``__post_init__``.
+    :arg created_property: Name of the org property that holds the
+        creation date (e.g. ``"CREATED"``).  The parser looks for this
+        property on each item and uses its value for the ``Item.created``
+        field.  Case-insensitive — normalized to uppercase in
+        ``__post_init__`` (org-mode convention for property names).
+        Default: ``"CREATED"``.  This property is automatically excluded
+        from ``Item.properties`` (like ``ID`` and ``ARCHIVE_TIME``).
     """
 
     item_predicate: Callable[[Any], bool] = field(
@@ -43,6 +50,7 @@ class Config:
     exclude_drawers: frozenset[str] = frozenset()
     exclude_blocks: frozenset[str] = frozenset()
     exclude_properties: frozenset[str] = frozenset()
+    created_property: str = "CREATED"
 
     def __post_init__(self) -> None:
         """Normalize exclusion sets to lowercase for case-insensitive matching.
@@ -65,4 +73,9 @@ class Config:
             self,
             "exclude_properties",
             frozenset(p.lower() for p in self.exclude_properties),
+        )
+        object.__setattr__(
+            self,
+            "created_property",
+            self.created_property.upper(),
         )

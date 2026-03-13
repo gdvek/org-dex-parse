@@ -71,3 +71,22 @@ class TestConfigCaseNormalization:
         assert config.tags_exclude_from_inheritance == frozenset(
             {"TODAY", "habit"}
         )
+
+
+# --- created_property ---
+
+
+class TestConfigCreatedProperty:
+    """Config.created_property is normalized to uppercase."""
+
+    def test_default(self):
+        config = Config()
+        assert config.created_property == "CREATED"
+
+    def test_custom(self):
+        config = Config(created_property="captured_on")
+        assert config.created_property == "CAPTURED_ON"
+
+    def test_already_uppercase(self):
+        config = Config(created_property="MY_DATE")
+        assert config.created_property == "MY_DATE"

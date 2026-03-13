@@ -1,14 +1,176 @@
 #+title: org-dex-parse
 #+author: Gabriele De Vecchi
+#+startup: overview
 
-* org-dex-parse
+Org-mode parsing library for [[https://github.com/gdvek/org-dex][org-dex]].  Transforms org files into structured
+items using [[https://github.com/karlicoss/orgparse][orgparse]] as the parsing backend.
 
-Parse org-mode files into structured data for the org-dex indexing system.
+Successor of [[https://github.com/gdvek/remi-org-parse][remi-org-parse]] — same mission, two key evolutions:
+configurable item definition (not hardcoded) and fixes for all parser bugs
+discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regression testing.
 
-** Status
+* What it does
+  Given an org file and a configuration, produces a flat tuple of parsed items.
+  Each item is a heading that matches a user-defined predicate — not a hardcoded
+  rule.
 
-Early development. Not yet usable.
+  #+begin_example
+  org file ──→ org-dex-parse ──→ ParseResult
+                    │                 └── .items: tuple[Item, ...]
+                    │
+               Config
+                 .item_predicate   ← what counts as an item
+                 .todos / .dones
+                 .exclude_drawers
+                 .exclude_blocks
+                 ...
+  #+end_example
 
-** License
+* How it differs from remi-org-parse
 
-GPL-3.0-or-later
+  | Aspect            | remi-org-parse                  | org-dex-parse             |
+  |-------------------+---------------------------------+---------------------------|
+  | Item definition   | Hardcoded: =:ID:= + =:Type:=        | Configurable predicate    |
+  | Consumer          | remi-org-db (Python)            | org-dex (Elisp)           |
+  | Drawer exclusion  | One policy (body + links)       | Separate policies         |
+  | Timestamp scoping | Broad (drawer/planning leakage) | Zone-aware extraction     |
+  | Link extraction   | Loses links in excluded drawers | Separate body/link policy |
+  | Body markup       | Stripped to plain text          | Raw text preserved        |
+  | Property scoping  | Subtree traversal               | Direct drawer only        |
+  | Performance       | Multi-pass tree walk            | Optimized (fewer passes)  |
+
+  Full list of v2 bugs addressed: [[file:project/v2-parser-findings.org][v2-parser-findings.org]].
+
+* Architecture
+  =orgparse= is a dependency, not a fork.  It handles low-level org-mode syntax
+  (headlines, properties, planning, timestamps).  This package adds the domain
+  layer: item discrimination via predicate, zone-aware extraction, body
+  collection with proper scoping.
+
+** Modules
+
+   | Module    | Responsibility                                       |
+   |-----------+------------------------------------------------------|
+   | =parser.py= | Orchestration: load file → walk tree → extract items |
+   | =body.py=   | Body text collection, affiliated keyword exclusion   |
+   | =links.py=  | Link extraction and classification (zone-aware)      |
+   | =config.py= | =Config=: predicate, keywords, exclusion lists         |
+   | =types.py=  | =Item=, =Timestamp=, =Link=, =ParseResult=                   |
+
+** Item predicate
+   The predicate is a function =headline → bool= that determines which
+   headings are items.  =:ID:= is a structural invariant — the predicate is
+   only called on headings that already have =:ID:=.
+
+   #+begin_example
+   Predicate examples:
+
+   canonical:  lambda h: True              (any heading with :ID:)
+   remi:       lambda h: has_property(h, "Type")  (:ID: + :Type:)
+   roam-like:  lambda h: not has_property(h, "ROAM_EXCLUDE")
+   #+end_example
+
+   The predicate partitions the entire org tree.  Every heading belongs to
+   exactly one item: either it /is/ an item, or it belongs to its nearest
+   item ancestor.  This partitioning determines:
+   - parent-item-id (transparent scaffolding traversal)
+   - body collection boundaries
+   - timestamp/link extraction scope
+
+** Zone-aware extraction
+   Extraction of timestamps, links, and body text respects exclusion zones.
+   A zone is a structural region (drawer, block, planning line) where certain
+   data types should not be extracted from.
+
+   #+begin_example
+   ┌─ heading ──────────────────────────────────┐
+   │  ┌─ PROPERTIES ──────┐  always excluded    │
+   │  │  :ID: ...         │  from ts/link/body  │
+   │  └───────────────────┘                     │
+   │  ┌─ LOGBOOK ─────────┐  excluded from body │
+   │  │  clock, states    │  extracted by       │
+   │  │                   │  dedicated handlers │
+   │  └───────────────────┘                     │
+   │  ┌─ ___LINKED_BY___ ┐  excluded from body  │
+   │  │  [[id:...][...]]  │  links EXTRACTED    │
+   │  └───────────────────┘                     │
+   │  body text here ...     ← body, ts, links  │
+   └────────────────────────────────────────────┘
+   #+end_example
+
+   Key principle: "exclude from body" ≠ "exclude from links".  Exclusion
+   policies are per data-type, not global.
+
+* Public API
+
+  #+begin_example
+  ┌────────────────────────────────────────────────────────────────────┐
+  │                          org_dex_parse                            │
+  ├────────────────────────────────────────────────────────────────────┤
+  │                                                                    │
+  │  Entry point                                                       │
+  │  ───────────                                                       │
+  │  parse_file(path, config) ──→ ParseResult                          │
+  │                                  └── .items: tuple[Item, ...]     │
+  │                                                                    │
+  │  Configuration                                                     │
+  │  ─────────────                                                     │
+  │  Config (frozen)                                                   │
+  │    .item_predicate          (headline) → bool                     │
+  │    .todos                                                          │
+  │    .dones                                                          │
+  │    .tags_exclude_from_inheritance                                  │
+  │    .exclude_drawers                                                │
+  │    .exclude_blocks                                                 │
+  │    .exclude_properties                                             │
+  │                                                                    │
+  │  Data types                                                        │
+  │  ──────────                                                        │
+  │  Item (frozen)                    Link (frozen)                   │
+  │    .title                           .target                       │
+  │    .item_id                         .type                         │
+  │    .todo                            .description                  │
+  │    .priority                                                       │
+  │    .level                         Timestamp (frozen)              │
+  │    .parent_item_id                  .date                         │
+  │    .local_tags                      .active                       │
+  │    .inherited_tags                  .repeater                     │
+  │    .body                                                           │
+  │    .raw_text                      Range (frozen)                  │
+  │    .scheduled                       .start                        │
+  │    .deadline                        .end                          │
+  │    .closed                          .active                       │
+  │    .captured_on                                                    │
+  │    .archived_on                   ClockEntry (frozen)             │
+  │    .active_ts                       .start                        │
+  │    .inactive_ts                     .end                          │
+  │    .range_ts                        .duration_minutes             │
+  │    .clock                                                          │
+  │    .state_changes                 StateChange (frozen)            │
+  │    .properties                      .to_state                     │
+  │    .org_links                       .from_state                   │
+  │    .web_links                       .timestamp                    │
+  │    .excalidraw_links                                               │
+  │    .image_links                                                    │
+  │    .file_links                                                     │
+  │    .other_links                                                    │
+  │    .linenumber                                                     │
+  │    .file_path                                                      │
+  │                                                                    │
+  └────────────────────────────────────────────────────────────────────┘
+  #+end_example
+
+* Consumers
+  - =org-dex= — indexing engine (primary consumer)
+  - CLI tools — batch analysis, validation
+
+* Development
+  #+begin_src sh
+    cd org-dex-parse/
+    .venv/bin/python -m pytest tests/ -v
+  #+end_src
+
+  Requires Python >=3.11.  Single dependency: =orgparse>=0.4=.
+
+* License
+  GPL-3.0-or-later

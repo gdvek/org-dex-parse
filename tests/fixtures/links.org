@@ -1,0 +1,38 @@
+#+TODO: TODO | DONE
+* Item con link vari                                          :tagA:
+  :PROPERTIES:
+  :ID: lnk-001
+  :END:
+  Org link con desc: [[https://example.com][Example]]
+  Org link senza desc: [[id:abc-123]]
+  Fuzzy link: [[Heading: with colon]]
+  Bare URL: https://bare.example.com/path
+  Bare URL con punteggiatura: https://example.com/page,
+  URL in parentesi: (https://example.com/paren)
+  Link mailto: [[mailto:user@example.com][mail]]
+  Link info: [[info:emacs#Top][Emacs manual]]
+  Link file: [[file:/tmp/test.org][local file]]
+  Link elisp: [[elisp:(message "hi")][run]]
+  Link doi: [[doi:10.1000/test]]
+  Link shell: [[shell:ls -la]]
+* Item senza link
+  :PROPERTIES:
+  :ID: lnk-002
+  :END:
+  Testo senza link.
+** Scaffolding con link
+   Link nello scaffolding: [[id:from-scaffolding]]
+* Item con dedup
+  :PROPERTIES:
+  :ID: lnk-003
+  :END:
+  Org wrapping bare: [[https://dedup.example.com/page][Dedup]]
+  E la stessa bare: https://dedup.example.com/page
+* Item con link in drawer
+  :PROPERTIES:
+  :ID: lnk-004
+  :END:
+  :LOGBOOK:
+  Link in logbook: [[id:inside-drawer]]
+  :END:
+  Body text qui.

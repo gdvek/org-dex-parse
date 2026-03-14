@@ -15,11 +15,112 @@ import orgparse.node as _orgparse_node
 from orgparse.node import OrgEnv
 
 from .config import Config
-from .types import Item, ParseResult
+from .types import Item, Link, ParseResult
 
 # Save the original tag regex at import time so we can restore it
 # when extra_tag_chars is not needed.  Used by the HACK(S04) monkey-patch.
 _ORIGINAL_RE_HEADING_TAGS = _orgparse_node.RE_HEADING_TAGS
+
+# -- Link extraction (S09a) ---------------------------------------------------
+
+# Pass 1: org-mode links — [[target][description]] or [[target]].
+_RE_ORG_LINK = re.compile(r'\[\[([^\]]+)\](?:\[([^\]]*)\])?\]')
+
+# Pass 2: bare URLs — http:// or https://.
+_RE_BARE_URL = re.compile(r'https?://[^\s\[\]<>]+')
+
+# Standard org-mode link schemas.  If the target starts with one of
+# these followed by ':', we split into type + target.  Everything else
+# is a fuzzy link (type="", target unchanged) — never split on ':'
+# without verifying the schema (fix F-LK2).
+_ORG_SCHEMAS = frozenset({
+    "id", "file", "file+sys", "file+emacs",
+    "https", "http", "ftp",
+    "mailto", "info", "shell", "elisp",
+    "doi", "news", "nntp", "irc",
+    "mhe", "rmail", "gnus", "bbdb",
+    "eww", "docview", "notmuch", "mu4e",
+    "attachment",
+})
+
+# Characters stripped from the end of bare URLs (trailing punctuation
+# that is syntactically part of the surrounding sentence, not the URL).
+_BARE_URL_TRAILING = set(",;:)")
+
+
+def _parse_link_target(raw_target: str) -> tuple[str, str]:
+    """Split a raw org-link target into (type, target).
+
+    If the target starts with a recognized schema followed by ':',
+    returns (schema, rest).  Otherwise returns ("", raw_target) —
+    the link is fuzzy and the target is preserved intact (fix F-LK2).
+
+    For URL-style schemas (https://, http://, ftp://, etc.), the
+    authority separator '//' is stripped from the target — it is
+    structural, not part of the resource identifier.  Non-URL schemas
+    (id:, mailto:, file:) have no '//' and are unaffected.
+    """
+    colon = raw_target.find(":")
+    if colon > 0:
+        candidate = raw_target[:colon]
+        if candidate in _ORG_SCHEMAS:
+            rest = raw_target[colon + 1:]
+            # Strip '://' → '//' from URL-style schemas.
+            if rest.startswith("//"):
+                rest = rest[2:]
+            return candidate, rest
+    return "", raw_target
+
+
+def _extract_links(text: str) -> tuple[Link, ...]:
+    """Extract all links from raw_text in two passes.
+
+    Pass 1 finds org-mode links ([[target][desc]] and [[target]]),
+    records their character spans so pass 2 can skip overlapping bare
+    URLs (dedup — AC5).
+
+    Pass 2 finds bare http/https URLs, strips trailing punctuation
+    (AC4), and skips any match whose span overlaps a pass-1 match.
+
+    Both passes collect (position, Link) pairs, then sort by position
+    to produce links in document order (AC11).
+    """
+    # Collect (start_position, Link) pairs from both passes, then
+    # sort by position to interleave org links and bare URLs correctly.
+    found: list[tuple[int, Link]] = []
+    # Spans occupied by pass-1 matches — used by pass 2 for dedup.
+    occupied: list[tuple[int, int]] = []
+
+    # -- Pass 1: org-mode links -----------------------------------------------
+    for m in _RE_ORG_LINK.finditer(text):
+        raw_target = m.group(1)
+        description = m.group(2)  # None if no [desc] part
+        link_type, target = _parse_link_target(raw_target)
+        found.append((m.start(), Link(target=target, type=link_type,
+                                      description=description)))
+        occupied.append((m.start(), m.end()))
+
+    # -- Pass 2: bare URLs ----------------------------------------------------
+    for m in _RE_BARE_URL.finditer(text):
+        # Skip if this bare URL overlaps any org-link span (AC5).
+        bare_start = m.start()
+        if any(occ_s <= bare_start < occ_e
+               for occ_s, occ_e in occupied):
+            continue
+
+        url = m.group()
+        # Strip trailing punctuation (AC4).
+        while url and url[-1] in _BARE_URL_TRAILING:
+            url = url[:-1]
+
+        # Bare URLs always have a schema (http or https).
+        link_type, target = _parse_link_target(url)
+        found.append((bare_start, Link(target=target, type=link_type,
+                                       description=None)))
+
+    # Sort by position for document order (AC11).
+    found.sort(key=lambda x: x[0])
+    return tuple(link for _, link in found)
 
 
 def is_item(node: Any, predicate: Callable[[Any], bool]) -> bool:
@@ -182,6 +283,11 @@ def parse_file(path: str, config: Config) -> ParseResult:
             todo = node.todo if node.todo else None
             priority = node.priority
 
+            # -- Raw text and links (S06, S09a) --------------------------------
+            # Collect raw_text first, then extract links from it.
+            # Links operate on raw_text (no zone exclusion) — fix F-LK1.
+            raw_text = _collect_raw_text(node, predicate)
+
             items.append(
                 Item(
                     title=node.heading,
@@ -190,7 +296,8 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     parent_item_id=_find_parent_id(node, predicate),
                     linenumber=node.linenumber,
                     file_path=path_str,
-                    raw_text=_collect_raw_text(node, predicate),
+                    raw_text=raw_text,
+                    links=_extract_links(raw_text),
                     properties=props,
                     local_tags=raw_local,
                     inherited_tags=inherited,

@@ -39,6 +39,10 @@ class Config:
         ``__post_init__`` (org-mode convention for property names).
         Default: ``"CREATED"``.  This property is automatically excluded
         from ``Item.properties`` (like ``ID`` and ``ARCHIVE_TIME``).
+    :arg extra_tag_chars: Additional characters to allow in org-mode tag
+        names beyond the default ``[a-zA-Z0-9_@#%]``.  The parser uses
+        this to build a monkey-patch regex for orgparse (applied in S04).
+        Default: ``""`` (no extra characters).
     """
 
     item_predicate: Callable[[Any], bool] = field(
@@ -51,6 +55,7 @@ class Config:
     exclude_blocks: frozenset[str] = frozenset()
     exclude_properties: frozenset[str] = frozenset()
     created_property: str = "CREATED"
+    extra_tag_chars: str = ""
 
     def __post_init__(self) -> None:
         """Normalize exclusion sets to lowercase for case-insensitive matching.

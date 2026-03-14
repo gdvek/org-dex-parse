@@ -145,13 +145,8 @@ class Item:
     body: str | None = None
     raw_text: str = ""
 
-    # Links
-    org_links: tuple[Link, ...] = ()
-    web_links: tuple[Link, ...] = ()
-    excalidraw_links: tuple[Link, ...] = ()
-    image_links: tuple[Link, ...] = ()
-    file_links: tuple[Link, ...] = ()
-    other_links: tuple[Link, ...] = ()
+    # Links — flat tuple; classification is the consumer's responsibility
+    links: tuple[Link, ...] = ()
 
     # Properties
     properties: tuple[tuple[str, str], ...] = ()

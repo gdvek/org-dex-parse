@@ -140,12 +140,7 @@ class TestItemMinimal:
         assert item.clock == ()
         assert item.state_changes == ()
         assert item.properties == ()
-        assert item.org_links == ()
-        assert item.web_links == ()
-        assert item.excalidraw_links == ()
-        assert item.image_links == ()
-        assert item.file_links == ()
-        assert item.other_links == ()
+        assert item.links == ()
 
     def test_default_raw_text(self):
         item = Item(
@@ -208,12 +203,7 @@ class TestItemFieldTypes:
             state_changes=(sc,),
             body="Some body text with *bold* markup.",
             raw_text="* DOING Full item :tag:\n...",
-            org_links=(link,),
-            web_links=(web_link,),
-            excalidraw_links=(),
-            image_links=(),
-            file_links=(),
-            other_links=(),
+            links=(link, web_link),
             properties=(("Type", "project"), ("EFFORT", "1:00")),
         )
 
@@ -225,7 +215,7 @@ class TestItemFieldTypes:
         assert item.created.date == datetime.date(2026, 1, 10)
         assert item.clock[0].duration_minutes == 90
         assert item.state_changes[0].from_state == "TODO"
-        assert item.org_links[0].description == "My note"
+        assert item.links[0].description == "My note"
         assert item.properties[0] == ("Type", "project")
 
     def test_timestamp_date_only(self):

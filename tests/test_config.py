@@ -90,3 +90,18 @@ class TestConfigCreatedProperty:
     def test_already_uppercase(self):
         config = Config(created_property="MY_DATE")
         assert config.created_property == "MY_DATE"
+
+
+# --- extra_tag_chars ---
+
+
+class TestConfigExtraTagChars:
+    """Config.extra_tag_chars is a raw string for monkey-patch characters."""
+
+    def test_default_empty(self):
+        config = Config()
+        assert config.extra_tag_chars == ""
+
+    def test_custom_chars(self):
+        config = Config(extra_tag_chars="%#")
+        assert config.extra_tag_chars == "%#"

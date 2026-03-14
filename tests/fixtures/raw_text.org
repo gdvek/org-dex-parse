@@ -1,0 +1,24 @@
+* Item A
+  SCHEDULED: <2026-03-20>
+  :PROPERTIES:
+  :ID: aaa
+  :END:
+  Body di A.
+** Scaffolding pre-B
+   Testo scaffolding pre-B.
+** Item B
+   :PROPERTIES:
+   :ID: bbb
+   :END:
+   Body di B.
+** Scaffolding post-B
+   Testo scaffolding post-B.
+* Item C
+  :PROPERTIES:
+  :ID: ccc
+  :END:
+  Body di C.
+* Item D
+  :PROPERTIES:
+  :ID: ddd
+  :END:

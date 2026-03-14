@@ -1,12 +1,12 @@
-"""Tree walk, item discrimination, and field extraction.
+"""Tree walk, item discrimination, and raw_text collection.
 
 Walks the orgparse tree, partitions headings into items and scaffolding
 using the unified is_item check (:ID: invariant + configurable predicate),
-and extracts structural, semantic, and property fields for each item.
+collects raw_text for each item (item minus sub-items), and builds a
+ParseResult with structural fields and raw_text.
 """
 from __future__ import annotations
 
-import datetime
 import re
 from typing import Any, Callable
 
@@ -14,10 +14,8 @@ import orgparse
 import orgparse.node as _orgparse_node
 from orgparse.node import OrgEnv
 
-from orgparse.date import OrgDate
-
 from .config import Config
-from .types import Item, ParseResult, Timestamp
+from .types import Item, ParseResult
 
 # Save the original tag regex at import time so we can restore it
 # when extra_tag_chars is not needed.  Used by the HACK(S04) monkey-patch.
@@ -58,46 +56,6 @@ def _find_parent_id(
     return None
 
 
-def _extract_properties(
-    node: Any, excluded: frozenset[str]
-) -> tuple[tuple[str, str], ...]:
-    """Extract properties from the heading's direct PROPERTIES drawer.
-
-    Returns (key, value) pairs in drawer order, excluding properties in
-    the excluded set.  Comparison is case-insensitive (key lowered against
-    the already-lowercase excluded set).
-
-    Values are preserved as-is via str() — no normalization (F-PR2).
-    Only the direct drawer is read — orgparse node.properties does not
-    walk the subtree, which fixes F-PR1 by design.
-    """
-    return tuple(
-        (k, str(v))
-        for k, v in node.properties.items()
-        if k.lower() not in excluded
-    )
-
-
-def _extract_tags(
-    node: Any, tags_exclude_from_inheritance: frozenset[str]
-) -> tuple[frozenset[str], frozenset[str]]:
-    """Classify tags into local and inherited sets.
-
-    Empty strings are filtered before classification (F-TG1: malformed
-    headings like "::" can produce empty tag strings in orgparse).
-
-    Returns (local_tags, inherited_tags).
-    """
-    # Filter empty tags first — before any set operation.
-    raw_local = frozenset(t for t in node.shallow_tags if t)
-    raw_all = frozenset(t for t in node.tags if t)
-
-    # Inherited = all tags minus local tags minus excluded-from-inheritance.
-    inherited = raw_all - raw_local - tags_exclude_from_inheritance
-
-    return raw_local, inherited
-
-
 def _apply_tag_monkey_patch(extra_tag_chars: str) -> None:
     """Set or restore the orgparse tag regex based on extra_tag_chars.
 
@@ -124,67 +82,31 @@ def _apply_tag_monkey_patch(extra_tag_chars: str) -> None:
         _orgparse_node.RE_HEADING_TAGS = _ORIGINAL_RE_HEADING_TAGS
 
 
-# Regex for ARCHIVE_TIME bare format: "2026-01-15 Thu 14:30"
-# No delimiters (<> or []) — Emacs writes this format on archiving.
-_RE_ARCHIVE_TIME = re.compile(
-    r"(\d{4})-(\d{2})-(\d{2})\s+\w+\s+(\d{2}):(\d{2})"
-)
+def _collect_raw_text(
+    node: Any, predicate: Callable[[Any], bool]
+) -> str:
+    """Collect the complete unfiltered source text for an item node.
 
+    Concatenates str(node) — the original file lines for this node
+    (heading, PROPERTIES, planning, drawers, body, everything) — then
+    recurses into non-item children.  Children passing is_item are
+    separate items and are skipped entirely.
 
-def _orgdate_to_timestamp(od: OrgDate) -> Timestamp:
-    """Convert an orgparse OrgDate to a Timestamp.
+    No filtering is applied: no drawer exclusion, no block exclusion,
+    no dedenting, no markup stripping.  The result is the raw org-mode
+    source text that belongs to this item.
 
-    Preserves date vs datetime (AC7), active flag (AC8), and formats
-    the repeater tuple as a string like "+1w" (AC9).
+    Same algorithm as remi-org-parse _collect_raw_text (body.py:45-77),
+    with is_item as the unified gate instead of the hardcoded :Type: check.
     """
-    # Repeater: orgparse stores it as a private (prefix, num, unit) tuple.
-    # We format it as a single string for simpler downstream use.
-    repeater = None
-    if od._repeater:
-        prefix, num, unit = od._repeater
-        repeater = f"{prefix}{num}{unit}"
+    parts: list[str] = [str(node)]
 
-    return Timestamp(date=od.start, active=od.is_active(), repeater=repeater)
+    for child in node.children:
+        if is_item(child, predicate):
+            continue
+        parts.append(_collect_raw_text(child, predicate))
 
-
-def _parse_created(node: Any, created_property: str) -> Timestamp | None:
-    """Extract the created timestamp from a configurable property.
-
-    The property value is an org timestamp string (active or inactive).
-    Returns None if the property is absent.
-    """
-    value = node.get_property(created_property)
-    if value is None:
-        return None
-
-    dates = OrgDate.list_from_str(str(value))
-    if not dates:
-        return None
-
-    return _orgdate_to_timestamp(dates[0])
-
-
-def _parse_archive_time(node: Any) -> Timestamp | None:
-    """Extract archived_on from the ARCHIVE_TIME property.
-
-    ARCHIVE_TIME uses a bare format without org delimiters:
-    "2026-01-15 Thu 14:30".  Always inactive (archiving is a past event),
-    never has a repeater.  Returns None if the property is absent.
-    """
-    value = node.get_property("ARCHIVE_TIME")
-    if value is None:
-        return None
-
-    match = _RE_ARCHIVE_TIME.search(str(value))
-    if not match:
-        return None
-
-    year, month, day, hour, minute = (int(g) for g in match.groups())
-
-    return Timestamp(
-        date=datetime.datetime(year, month, day, hour, minute),
-        active=False,
-    )
+    return "\n".join(parts)
 
 
 def parse_file(path: str, config: Config) -> ParseResult:
@@ -193,12 +115,8 @@ def parse_file(path: str, config: Config) -> ParseResult:
     Loads the file via orgparse (passing todos/dones through OrgEnv for
     correct keyword recognition), walks all nodes in document order, and
     builds an Item for each heading that passes the is_item check.
-
-    Each Item includes structural fields (S03), properties, tags, TODO
-    keyword, and priority (S04), and dedicated timestamp fields —
-    scheduled, deadline, closed, created, archived_on (S05a).  Fields
-    for generic timestamps, clock, body, and links are left at defaults
-    (S05b–S08).
+    Each Item includes raw_text — the complete unfiltered source text
+    for that item, minus sub-items.
     """
     # Normalize path to string for consistent file_path values.
     path_str = str(path)
@@ -222,13 +140,6 @@ def parse_file(path: str, config: Config) -> ParseResult:
 
     predicate = config.item_predicate
 
-    # Build the property exclusion set once — all lowercase for
-    # case-insensitive comparison.  Always excluded: ID (in item_id),
-    # ARCHIVE_TIME (will be in archived_on, S05), and created_property
-    # (will be in created, S05).
-    always_excluded = {"id", "archive_time", config.created_property.lower()}
-    property_exclusions = always_excluded | config.exclude_properties
-
     items: list[Item] = []
 
     # root[1:] iterates ALL nodes in document order, skipping the
@@ -236,34 +147,6 @@ def parse_file(path: str, config: Config) -> ParseResult:
     # iterator over the entire tree.
     for node in root[1:]:
         if is_item(node, predicate):
-            # S04: extract properties, tags, todo, priority.
-            properties = _extract_properties(node, property_exclusions)
-            local_tags, inherited_tags = _extract_tags(
-                node, config.tags_exclude_from_inheritance
-            )
-
-            # TODO keyword: orgparse returns "" when no keyword is set;
-            # we normalize to None for consistency with Item.todo type.
-            todo = node.todo if node.todo else None
-
-            # S05a: dedicated timestamp fields.
-            # Planning: orgparse returns falsy OrgDate subclasses when absent.
-            scheduled = (
-                _orgdate_to_timestamp(node.scheduled)
-                if node.scheduled
-                else None
-            )
-            deadline = (
-                _orgdate_to_timestamp(node.deadline)
-                if node.deadline
-                else None
-            )
-            closed = (
-                _orgdate_to_timestamp(node.closed)
-                if node.closed
-                else None
-            )
-
             items.append(
                 Item(
                     title=node.heading,
@@ -272,16 +155,7 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     parent_item_id=_find_parent_id(node, predicate),
                     linenumber=node.linenumber,
                     file_path=path_str,
-                    todo=todo,
-                    priority=node.priority,
-                    local_tags=local_tags,
-                    inherited_tags=inherited_tags,
-                    properties=properties,
-                    scheduled=scheduled,
-                    deadline=deadline,
-                    closed=closed,
-                    created=_parse_created(node, config.created_property),
-                    archived_on=_parse_archive_time(node),
+                    raw_text=_collect_raw_text(node, predicate),
                 )
             )
 

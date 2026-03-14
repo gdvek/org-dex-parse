@@ -1,6 +1,5 @@
 """Tests for parser.py — tree walk, item discrimination, parent resolution.
 
-Story S03: Partizionamento albero e discriminazione item.
 Fixture: tree_basic.org (6 items with default predicate, 5 with remi predicate).
 """
 from __future__ import annotations
@@ -50,11 +49,10 @@ class TestParseFileBasic:
         assert items["item-005"].parent_item_id is None
 
     def test_structural_fields_populated(self):
-        """Structural fields populated; S05–S08 fields at defaults.
+        """Structural fields populated; all other fields at defaults.
 
-        After S04, semantic fields (todo, properties, tags, priority) are
-        also populated.  This test verifies the structural fields and
-        checks that extraction fields not yet implemented remain at defaults.
+        After S06, raw_text will also be populated.  For now, only the
+        5 required structural fields + parent_item_id are set.
         """
         items = _items_by_id(parse_file(TREE_BASIC, Config()))
         item = items["item-001"]
@@ -65,30 +63,6 @@ class TestParseFileBasic:
         assert item.level == 1
         assert item.linenumber > 0
         assert item.file_path == str(TREE_BASIC)
-
-        # S04 semantic fields — populated from #+TODO: in file and drawer
-        assert item.todo == "TODO"
-        assert item.properties == (("Type", "project"),)
-
-        # S04 fields at defaults (no tags or priority on this heading)
-        assert item.priority is None
-        assert item.local_tags == frozenset()
-        assert item.inherited_tags == frozenset()
-
-        # S05–S08 fields at defaults
-        assert item.scheduled is None
-        assert item.deadline is None
-        assert item.closed is None
-        assert item.created is None
-        assert item.archived_on is None
-        assert item.active_ts == ()
-        assert item.inactive_ts == ()
-        assert item.range_ts == ()
-        assert item.clock == ()
-        assert item.state_changes == ()
-        assert item.body is None
-        assert item.raw_text == ""
-        assert item.links == ()
 
     def test_item_order_matches_document(self):
         """Items in result follow document order."""

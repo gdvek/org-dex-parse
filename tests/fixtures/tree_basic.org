@@ -1,0 +1,48 @@
+#+TITLE: Tree Basic
+#+TODO: TODO NEXT DOING | DONE CANCELED
+
+* TODO Project Alpha
+  :PROPERTIES:
+  :ID: item-001
+  :Type: project
+  :END:
+
+** Scaffolding section
+   Heading organizzativo senza :ID:.
+
+*** NEXT Task under scaffolding
+    :PROPERTIES:
+    :ID: item-002
+    :Type: task
+    :END:
+
+** Direct child item
+   :PROPERTIES:
+   :ID: item-003
+   :Type: task
+   :END:
+
+* Heading without ID
+  Heading senza :ID: né :Type:.
+
+* Note with ID only
+  :PROPERTIES:
+  :ID: item-004
+  :END:
+  Ha :ID: ma non :Type:.
+
+* Deep nesting
+  :PROPERTIES:
+  :ID: item-005
+  :Type: project
+  :END:
+
+** Level 2 scaffolding
+
+*** Level 3 scaffolding
+
+**** Deep item
+     :PROPERTIES:
+     :ID: item-006
+     :Type: task
+     :END:

@@ -1,0 +1,12 @@
+#+TITLE: Parent Without ID
+
+* Parent with Type but no ID
+  :PROPERTIES:
+  :Type: project
+  :END:
+
+** Child item
+   :PROPERTIES:
+   :ID: child-001
+   :Type: task
+   :END:

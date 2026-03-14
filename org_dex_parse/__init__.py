@@ -3,6 +3,7 @@
 __version__ = "0.1.0"
 
 from org_dex_parse.config import Config
+from org_dex_parse.parser import parse_file
 from org_dex_parse.types import (
     ClockEntry,
     Item,
@@ -22,4 +23,5 @@ __all__ = [
     "Range",
     "StateChange",
     "Timestamp",
+    "parse_file",
 ]

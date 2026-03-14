@@ -1,0 +1,33 @@
+#+TITLE: Timestamp Dedicated Fields
+#+TODO: TODO | DONE
+
+* Full planning and created
+  SCHEDULED: <2026-04-01 Wed> DEADLINE: <2026-04-15 Wed> CLOSED: [2026-03-30 Mon 14:30]
+  :PROPERTIES:
+  :ID: ts-001
+  :CREATED: [2026-03-01 Sun]
+  :END:
+
+* No planning no created
+  :PROPERTIES:
+  :ID: ts-002
+  :END:
+
+* Active created with time
+  :PROPERTIES:
+  :ID: ts-003
+  :CREATED: <2026-02-15 Sat 10:00>
+  :END:
+
+* Archived item
+  :PROPERTIES:
+  :ID: ts-004
+  :ARCHIVE_TIME: 2026-01-15 Thu 14:30
+  :CREATED: [2026-01-01 Wed]
+  :END:
+
+* Repeater scheduled
+  SCHEDULED: <2026-04-01 Wed +1w>
+  :PROPERTIES:
+  :ID: ts-005
+  :END:

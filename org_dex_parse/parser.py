@@ -6,6 +6,7 @@ and extracts structural, semantic, and property fields for each item.
 """
 from __future__ import annotations
 
+import datetime
 import re
 from typing import Any, Callable
 
@@ -13,8 +14,10 @@ import orgparse
 import orgparse.node as _orgparse_node
 from orgparse.node import OrgEnv
 
+from orgparse.date import OrgDate
+
 from .config import Config
-from .types import Item, ParseResult
+from .types import Item, ParseResult, Timestamp
 
 # Save the original tag regex at import time so we can restore it
 # when extra_tag_chars is not needed.  Used by the HACK(S04) monkey-patch.
@@ -121,6 +124,69 @@ def _apply_tag_monkey_patch(extra_tag_chars: str) -> None:
         _orgparse_node.RE_HEADING_TAGS = _ORIGINAL_RE_HEADING_TAGS
 
 
+# Regex for ARCHIVE_TIME bare format: "2026-01-15 Thu 14:30"
+# No delimiters (<> or []) — Emacs writes this format on archiving.
+_RE_ARCHIVE_TIME = re.compile(
+    r"(\d{4})-(\d{2})-(\d{2})\s+\w+\s+(\d{2}):(\d{2})"
+)
+
+
+def _orgdate_to_timestamp(od: OrgDate) -> Timestamp:
+    """Convert an orgparse OrgDate to a Timestamp.
+
+    Preserves date vs datetime (AC7), active flag (AC8), and formats
+    the repeater tuple as a string like "+1w" (AC9).
+    """
+    # Repeater: orgparse stores it as a private (prefix, num, unit) tuple.
+    # We format it as a single string for simpler downstream use.
+    repeater = None
+    if od._repeater:
+        prefix, num, unit = od._repeater
+        repeater = f"{prefix}{num}{unit}"
+
+    return Timestamp(date=od.start, active=od.is_active(), repeater=repeater)
+
+
+def _parse_created(node: Any, created_property: str) -> Timestamp | None:
+    """Extract the created timestamp from a configurable property.
+
+    The property value is an org timestamp string (active or inactive).
+    Returns None if the property is absent.
+    """
+    value = node.get_property(created_property)
+    if value is None:
+        return None
+
+    dates = OrgDate.list_from_str(str(value))
+    if not dates:
+        return None
+
+    return _orgdate_to_timestamp(dates[0])
+
+
+def _parse_archive_time(node: Any) -> Timestamp | None:
+    """Extract archived_on from the ARCHIVE_TIME property.
+
+    ARCHIVE_TIME uses a bare format without org delimiters:
+    "2026-01-15 Thu 14:30".  Always inactive (archiving is a past event),
+    never has a repeater.  Returns None if the property is absent.
+    """
+    value = node.get_property("ARCHIVE_TIME")
+    if value is None:
+        return None
+
+    match = _RE_ARCHIVE_TIME.search(str(value))
+    if not match:
+        return None
+
+    year, month, day, hour, minute = (int(g) for g in match.groups())
+
+    return Timestamp(
+        date=datetime.datetime(year, month, day, hour, minute),
+        active=False,
+    )
+
+
 def parse_file(path: str, config: Config) -> ParseResult:
     """Parse an org file into a ParseResult with Items.
 
@@ -129,8 +195,10 @@ def parse_file(path: str, config: Config) -> ParseResult:
     builds an Item for each heading that passes the is_item check.
 
     Each Item includes structural fields (S03), properties, tags, TODO
-    keyword, and priority (S04).  Fields for timestamps, clock, body,
-    and links are left at defaults (S05–S08).
+    keyword, and priority (S04), and dedicated timestamp fields —
+    scheduled, deadline, closed, created, archived_on (S05a).  Fields
+    for generic timestamps, clock, body, and links are left at defaults
+    (S05b–S08).
     """
     # Normalize path to string for consistent file_path values.
     path_str = str(path)
@@ -178,6 +246,24 @@ def parse_file(path: str, config: Config) -> ParseResult:
             # we normalize to None for consistency with Item.todo type.
             todo = node.todo if node.todo else None
 
+            # S05a: dedicated timestamp fields.
+            # Planning: orgparse returns falsy OrgDate subclasses when absent.
+            scheduled = (
+                _orgdate_to_timestamp(node.scheduled)
+                if node.scheduled
+                else None
+            )
+            deadline = (
+                _orgdate_to_timestamp(node.deadline)
+                if node.deadline
+                else None
+            )
+            closed = (
+                _orgdate_to_timestamp(node.closed)
+                if node.closed
+                else None
+            )
+
             items.append(
                 Item(
                     title=node.heading,
@@ -191,6 +277,11 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     local_tags=local_tags,
                     inherited_tags=inherited_tags,
                     properties=properties,
+                    scheduled=scheduled,
+                    deadline=deadline,
+                    closed=closed,
+                    created=_parse_created(node, config.created_property),
+                    archived_on=_parse_archive_time(node),
                 )
             )
 

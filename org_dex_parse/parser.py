@@ -140,6 +140,14 @@ def parse_file(path: str, config: Config) -> ParseResult:
 
     predicate = config.item_predicate
 
+    # Property names always excluded from Item.properties.
+    # ID → already in item_id; ARCHIVE_TIME → future archived_on;
+    # created_property → future created.  All compared lowercase.
+    always_excluded_props = {
+        "id", "archive_time", config.created_property.lower()
+    }
+    excluded_props = always_excluded_props | config.exclude_properties
+
     items: list[Item] = []
 
     # root[1:] iterates ALL nodes in document order, skipping the
@@ -147,6 +155,33 @@ def parse_file(path: str, config: Config) -> ParseResult:
     # iterator over the entire tree.
     for node in root[1:]:
         if is_item(node, predicate):
+            # -- Properties (AC1–AC6) ----------------------------------------
+            # node.properties is the direct PROPERTIES drawer only (no
+            # subtree) — this prevents F-PR1 (subtree leakage) by design.
+            # str(v) preserves values as-is — prevents F-PR2 (effort
+            # normalization).
+            props = tuple(
+                (k, str(v))
+                for k, v in node.properties.items()
+                if k.lower() not in excluded_props
+            )
+
+            # -- Tags (AC7–AC9) ----------------------------------------------
+            # Filter empty strings before classification (fix F-TG1:
+            # malformed headings like '::' produce empty-string tags).
+            raw_local = frozenset(t for t in node.shallow_tags if t)
+            raw_all = frozenset(t for t in node.tags if t)
+            inherited = frozenset(
+                raw_all - raw_local
+                - config.tags_exclude_from_inheritance
+            )
+
+            # -- TODO and priority (AC12–AC13) --------------------------------
+            # node.todo is "" when absent — normalize to None.
+            # node.priority is already None when absent.
+            todo = node.todo if node.todo else None
+            priority = node.priority
+
             items.append(
                 Item(
                     title=node.heading,
@@ -156,6 +191,11 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     linenumber=node.linenumber,
                     file_path=path_str,
                     raw_text=_collect_raw_text(node, predicate),
+                    properties=props,
+                    local_tags=raw_local,
+                    inherited_tags=inherited,
+                    todo=todo,
+                    priority=priority,
                 )
             )
 

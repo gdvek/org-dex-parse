@@ -1,0 +1,6 @@
+#+TITLE: Extra Tag Chars
+
+* Tagged item :%identity:#entity:
+  :PROPERTIES:
+  :ID: et-001
+  :END:

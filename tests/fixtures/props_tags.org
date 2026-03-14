@@ -1,0 +1,34 @@
+#+TITLE: Properties and Tags
+#+TODO: TODO NEXT | DONE
+
+* TODO [#A] Project Alpha :work:important:
+  :PROPERTIES:
+  :ID: pt-001
+  :Type: project
+  :Effort: 1:00
+  :CREATED: [2026-03-01 Sun]
+  :ARCHIVE_TIME: 2026-01-15
+  :Custom: some value
+  :END:
+
+** Child task :urgent:
+   :PROPERTIES:
+   :ID: pt-002
+   :Type: task
+   :END:
+
+* Note with malformed tag :valid::also_valid:
+  :PROPERTIES:
+  :ID: pt-003
+  :END:
+
+* DONE [#B] Completed item
+  :PROPERTIES:
+  :ID: pt-004
+  :Type: task
+  :END:
+
+* No keyword item
+  :PROPERTIES:
+  :ID: pt-005
+  :END:

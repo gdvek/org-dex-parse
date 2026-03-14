@@ -49,8 +49,13 @@ class TestParseFileBasic:
         assert items["item-004"].parent_item_id is None
         assert items["item-005"].parent_item_id is None
 
-    def test_skeleton_fields_populated(self):
-        """AC8: only 6 structural fields populated; all others at defaults."""
+    def test_structural_fields_populated(self):
+        """Structural fields populated; S05–S08 fields at defaults.
+
+        After S04, semantic fields (todo, properties, tags, priority) are
+        also populated.  This test verifies the structural fields and
+        checks that extraction fields not yet implemented remain at defaults.
+        """
         items = _items_by_id(parse_file(TREE_BASIC, Config()))
         item = items["item-001"]
 
@@ -61,11 +66,16 @@ class TestParseFileBasic:
         assert item.linenumber > 0
         assert item.file_path == str(TREE_BASIC)
 
-        # All optional fields at defaults
-        assert item.todo is None
+        # S04 semantic fields — populated from #+TODO: in file and drawer
+        assert item.todo == "TODO"
+        assert item.properties == (("Type", "project"),)
+
+        # S04 fields at defaults (no tags or priority on this heading)
         assert item.priority is None
         assert item.local_tags == frozenset()
         assert item.inherited_tags == frozenset()
+
+        # S05–S08 fields at defaults
         assert item.scheduled is None
         assert item.deadline is None
         assert item.closed is None
@@ -79,7 +89,6 @@ class TestParseFileBasic:
         assert item.body is None
         assert item.raw_text == ""
         assert item.links == ()
-        assert item.properties == ()
 
     def test_item_order_matches_document(self):
         """Items in result follow document order."""

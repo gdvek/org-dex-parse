@@ -278,3 +278,43 @@ class TestLinkCount:
         """lnk-004 has 1 link from drawer."""
         items = _parse()
         assert len(items["lnk-004"].links) == 1
+
+    def test_lnk005_link_count(self):
+        """lnk-005 has 3 links with ] in descriptions (F-LK4)."""
+        items = _parse()
+        assert len(items["lnk-005"].links) == 3
+
+
+# -- F-LK4: ] inside descriptions -------------------------------------------
+
+class TestBracketInDescription:
+    """Fix F-LK4: regex must allow single ] in link descriptions.
+
+    Org-mode only closes a link on ']]' — a lone ']' is valid inside
+    the description.  The old regex [^\\]]* rejected any ']', losing
+    93% of id links on remi.org.
+    """
+
+    def test_empty_brackets_in_description(self):
+        """F-LK4: [[id:x][[] Title]] — empty brackets prefix."""
+        items = _parse()
+        lk = next(lk for lk in items["lnk-005"].links
+                  if lk.target == "flk4-emoji")
+        assert lk.type == "id"
+        assert lk.description == "[] Titolo con emoji"
+
+    def test_type_prefix_in_description(self):
+        """F-LK4: [[id:x][[DECLARATION] Title]] — type prefix."""
+        items = _parse()
+        lk = next(lk for lk in items["lnk-005"].links
+                  if lk.target == "flk4-type")
+        assert lk.type == "id"
+        assert lk.description == "[DECLARATION] Titolo con tipo"
+
+    def test_single_bracket_in_description(self):
+        """F-LK4: [[id:x][Text ] in middle]] — lone ] mid-description."""
+        items = _parse()
+        lk = next(lk for lk in items["lnk-005"].links
+                  if lk.target == "flk4-single")
+        assert lk.type == "id"
+        assert lk.description == "Testo ] nel mezzo"

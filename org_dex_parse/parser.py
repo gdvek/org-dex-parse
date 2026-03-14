@@ -24,7 +24,20 @@ _ORIGINAL_RE_HEADING_TAGS = _orgparse_node.RE_HEADING_TAGS
 # -- Link extraction (S09a) ---------------------------------------------------
 
 # Pass 1: org-mode links — [[target][description]] or [[target]].
-_RE_ORG_LINK = re.compile(r'\[\[([^\]]+)\](?:\[([^\]]*)\])?\]')
+# Aligned with org-mode's org-link-bracket-re semantics:
+#   - Target: no raw [ or ] (org-mode also handles \-escaping, we don't
+#     because Remi data doesn't use it).
+#   - Description: any character, non-greedy — stops at first ]].
+#     This correctly handles ] and [ inside descriptions (fix F-LK4:
+#     descriptions like "[] Title" or "[TYPE] Title").
+# Backslash escaping in targets is not implemented (no Remi use case).
+_RE_ORG_LINK = re.compile(
+    r'\[\['
+    r'([^\[\]]+)'            # target: no [ or ] (aligned with org-mode)
+    r'\]'
+    r'(?:\[([\s\S]+?)\])?'   # description: any char, non-greedy
+    r'\]'
+)
 
 # Pass 2: bare URLs — http:// or https://.
 _RE_BARE_URL = re.compile(r'https?://[^\s\[\]<>]+')

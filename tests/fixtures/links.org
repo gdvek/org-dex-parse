@@ -36,3 +36,10 @@
   Link in logbook: [[id:inside-drawer]]
   :END:
   Body text qui.
+* Item con ] nelle descrizioni (F-LK4)
+  :PROPERTIES:
+  :ID: lnk-005
+  :END:
+  Empty brackets: [[id:flk4-emoji][[] Titolo con emoji]]
+  Type prefix: [[id:flk4-type][[DECLARATION] Titolo con tipo]]
+  Single bracket: [[id:flk4-single][Testo ] nel mezzo]]

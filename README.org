@@ -21,6 +21,7 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
                Config
                  .item_predicate   ← what counts as an item
                  .todos / .dones
+                 .extra_tag_chars  ← custom tag characters
                  .exclude_drawers
                  .exclude_blocks
                  ...
@@ -28,16 +29,18 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
 
 * How it differs from remi-org-parse
 
-  | Aspect            | remi-org-parse                  | org-dex-parse             |
-  |-------------------+---------------------------------+---------------------------|
-  | Item definition   | Hardcoded: =:ID:= + =:Type:=        | Configurable predicate    |
-  | Consumer          | remi-org-db (Python)            | org-dex (Elisp)           |
-  | Drawer exclusion  | One policy (body + links)       | Separate policies         |
-  | Timestamp scoping | Broad (drawer/planning leakage) | Zone-aware extraction     |
-  | Link extraction   | Loses links in excluded drawers | Separate body/link policy |
-  | Body markup       | Stripped to plain text          | Raw text preserved        |
-  | Property scoping  | Subtree traversal               | Direct drawer only        |
-  | Performance       | Multi-pass tree walk            | Optimized (fewer passes)  |
+  | Aspect              | remi-org-parse                  | org-dex-parse              |
+  |---------------------+---------------------------------+----------------------------|
+  | Item definition     | Hardcoded: =:ID:= + =:Type:=        | Configurable predicate     |
+  | Consumer            | remi-org-db (Python)            | org-dex (Elisp)            | /[Org dex is in python]/
+  | Drawer exclusion    | One policy (body + links)       | Separate policies          |
+  | Timestamp scoping   | Broad (drawer/planning leakage) | Zone-aware extraction      |
+  | Link extraction     | Loses links in excluded drawers | Separate body/link policy  |
+  | Link classification | 6 hardcoded categories          | None — consumer classifies |
+  | Tag characters      | Hardcoded monkey-patch          | Configurable extra chars   |
+  | Body markup         | Stripped to plain text          | Raw text preserved         |
+  | Property scoping    | Subtree traversal               | Direct drawer only         |
+  | Performance         | Multi-pass tree walk            | Optimized (fewer passes)   |
 
   Full list of v2 bugs addressed: [[file:project/v2-parser-findings.org][v2-parser-findings.org]].
 
@@ -48,12 +51,12 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
   collection with proper scoping.
 
 ** Modules
-
+   
    | Module    | Responsibility                                       |
    |-----------+------------------------------------------------------|
    | =parser.py= | Orchestration: load file → walk tree → extract items |
    | =body.py=   | Body text collection, affiliated keyword exclusion   |
-   | =links.py=  | Link extraction and classification (zone-aware)      |
+   | =links.py=  | Link extraction (zone-aware), no classification      |
    | =config.py= | =Config=: predicate, keywords, exclusion lists         |
    | =types.py=  | =Item=, =Timestamp=, =Link=, =ParseResult=                   |
 
@@ -101,6 +104,35 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
    Key principle: "exclude from body" ≠ "exclude from links".  Exclusion
    policies are per data-type, not global.
 
+** Extract, don't classify
+   The parser extracts structured data but does not classify it into
+   domain-specific categories.  Classification is the consumer's job.
+
+   #+begin_example
+   ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+   │   org file        │     │  org-dex-parse   │     │  consumer        │
+   │                   │ ──→ │  (extract)       │ ──→ │  (classify)      │
+   │  :tag1: :tag2:   │     │                   │     │                   │
+   │  [[id:...][...]] │     │  .local_tags      │     │  tag_category()  │
+   │  [[https://...]] │     │  .links           │     │  link_category() │
+   └──────────────────┘     └──────────────────┘     └──────────────────┘
+   #+end_example
+
+   *Tags:* extracted as raw strings in =.local_tags= and =.inherited_tags=.
+   The consumer applies its own classification (by prefix, by mapping, or
+   whatever logic fits the workflow).  This is the same pattern used in
+   remi-org-db, where =tag_category()= classifies at indexing time.
+
+   *Links:* extracted as =.links: tuple[Link, ...]=.  Each =Link= carries
+   =.type= (the schema, e.g. ="id"=, ="https"=, ="file"=, =""= for fuzzy)
+   and =.target=.  The consumer groups them into categories (org, web,
+   image, etc.) as needed.
+
+   remi-org-parse classified links into 6 hardcoded categories (including
+   =excalidraw_links=, specific to one workflow).  org-dex-parse removes
+   this coupling: the parser is workflow-agnostic, the consumer owns the
+   classification.
+
 * Public API
 
   #+begin_example
@@ -120,6 +152,7 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
   │    .todos                                                          │
   │    .dones                                                          │
   │    .tags_exclude_from_inheritance                                  │
+  │    .extra_tag_chars           default "" (no monkey-patch)        │
   │    .exclude_drawers                                                │
   │    .exclude_blocks                                                 │
   │    .exclude_properties                                             │
@@ -127,9 +160,9 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
   │                                                                    │
   │  Data types                                                        │
   │  ──────────                                                        │
-  │  Item (frozen)                    Link (frozen)                   │
+  │  Item (frozen, 24 fields)         Link (frozen)                   │
   │    .title                           .target                       │
-  │    .item_id                         .type                         │
+  │    .item_id                         .type  ← schema, e.g. "id"   │
   │    .todo                            .description                  │
   │    .priority                                                       │
   │    .level                         Timestamp (frozen)              │
@@ -141,7 +174,7 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
   │    .scheduled                       .start                        │
   │    .deadline                        .end                          │
   │    .closed                          .active                       │
-  │    .created                                                         │
+  │    .created                                                        │
   │    .archived_on                   ClockEntry (frozen)             │
   │    .active_ts                       .start                        │
   │    .inactive_ts                     .end                          │
@@ -149,13 +182,8 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
   │    .clock                                                          │
   │    .state_changes                 StateChange (frozen)            │
   │    .properties                      .to_state                     │
-  │    .org_links                       .from_state                   │
-  │    .web_links                       .timestamp                    │
-  │    .excalidraw_links                                               │
-  │    .image_links                                                    │
-  │    .file_links                                                     │
-  │    .other_links                                                    │
-  │    .linenumber                                                     │
+  │    .links  ← flat, unclassified     .from_state                  │
+  │    .linenumber                      .timestamp                    │
   │    .file_path                                                      │
   │                                                                    │
   └────────────────────────────────────────────────────────────────────┘

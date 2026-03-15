@@ -625,7 +625,9 @@ def is_item(node: Any, predicate: Callable[[Any], bool]) -> bool:
 
 
 def _find_parent_id(
-    node: Any, predicate: Callable[[Any], bool]
+    node: Any,
+    predicate: Callable[[Any], bool],
+    parent_map: dict[int, Any],
 ) -> str | None:
     """Walk up the tree to find the nearest item ancestor.
 
@@ -633,14 +635,84 @@ def _find_parent_id(
     :ID: of the first ancestor that passes is_item, or None if the node
     is top-level (no item ancestor exists).
 
-    Stop condition: orgparse's virtual root has level == 0.
+    Uses parent_map (S11) for O(1) parent lookup instead of orgparse's
+    node.parent which does an O(n) linear scan via _find_parent.
+
+    Stop condition: ancestor not in parent_map (reached root) or level 0.
     """
-    ancestor = node.parent
-    while ancestor.level > 0:
+    cur_id = id(node)
+    while cur_id in parent_map:
+        ancestor = parent_map[cur_id]
+        if ancestor.level == 0:
+            return None
         if is_item(ancestor, predicate):
             return ancestor.get_property("ID")
-        ancestor = ancestor.parent
+        cur_id = id(ancestor)
     return None
+
+
+def _build_parent_map(root: Any) -> dict[int, Any]:
+    """Build a parent lookup dict in a single O(n) top-down walk.
+
+    Returns {id(child_node): parent_node} for every node in the tree.
+    This replaces orgparse's node.parent which does an O(n) backward
+    linear scan for every access — causing O(n²) behavior when called
+    per item.
+
+    Uses node.children (O(k) forward scan per node, each node visited
+    once) for a total cost of O(n).
+    """
+    parent_map: dict[int, Any] = {}
+
+    def _walk(node: Any) -> None:
+        for child in node.children:
+            parent_map[id(child)] = node
+            _walk(child)
+
+    _walk(root)
+    return parent_map
+
+
+def _build_inherited_tags_map(
+    root: Any, parent_map: dict[int, Any]
+) -> dict[int, frozenset[str]]:
+    """Pre-compute inherited tags for every node in a single O(n) walk.
+
+    Returns {id(node): frozenset_of_ancestor_tags} for every node.
+    Each node's entry contains the union of shallow_tags from ALL its
+    ancestors (including FILETAGS from the root), but NOT the node's
+    own tags.
+
+    This replaces orgparse's node.tags which recursively calls
+    get_parent() at each level — each get_parent() triggering an O(n)
+    _find_parent scan.
+
+    shallow_tags is O(1) in orgparse (returns stored self._tags),
+    so the entire computation is O(n).
+    """
+    inherited: dict[int, frozenset[str]] = {}
+
+    # Root's shallow_tags returns FILETAGS (OrgRootNode._get_tags
+    # always returns file-level tags regardless of inher flag).
+    root_tags = frozenset(t for t in root.shallow_tags if t)
+
+    def _walk(node: Any, ancestor_tags: frozenset[str]) -> None:
+        # Store what this node inherits from its ancestors.
+        inherited[id(node)] = ancestor_tags
+
+        # What this node's children will inherit: ancestor tags + this
+        # node's own local tags (empty strings filtered out — fix F-TG1).
+        local = frozenset(t for t in node.shallow_tags if t)
+        child_tags = ancestor_tags | local
+
+        for child in node.children:
+            _walk(child, child_tags)
+
+    # Root's children inherit FILETAGS.
+    for child in root.children:
+        _walk(child, root_tags)
+
+    return inherited
 
 
 def _apply_tag_monkey_patch(extra_tag_chars: str) -> None:
@@ -735,6 +807,13 @@ def parse_file(path: str, config: Config) -> ParseResult:
     }
     excluded_props = always_excluded_props | config.exclude_properties
 
+    # S11: pre-compute parent pointers and inherited tags in O(n).
+    # orgparse's node.parent does an O(n) backward scan per access,
+    # causing O(n²) total when called per item.  These caches make
+    # parent lookup and tag inheritance O(1) per node.
+    parent_map = _build_parent_map(root)
+    inherited_tags_map = _build_inherited_tags_map(root, parent_map)
+
     items: list[Item] = []
 
     # root[1:] iterates ALL nodes in document order, skipping the
@@ -756,10 +835,12 @@ def parse_file(path: str, config: Config) -> ParseResult:
             # -- Tags (AC7–AC9) ----------------------------------------------
             # Filter empty strings before classification (fix F-TG1:
             # malformed headings like '::' produce empty-string tags).
+            # S11: use pre-computed inherited_tags_map instead of
+            # node.tags (which triggers O(n) _find_parent per level).
             raw_local = frozenset(t for t in node.shallow_tags if t)
-            raw_all = frozenset(t for t in node.tags if t)
+            ancestor_tags = inherited_tags_map.get(id(node), frozenset())
             inherited = frozenset(
-                raw_all - raw_local
+                ancestor_tags - raw_local
                 - config.tags_exclude_from_inheritance
             )
 
@@ -844,7 +925,8 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     title=node.heading,
                     item_id=node.get_property("ID"),
                     level=node.level,
-                    parent_item_id=_find_parent_id(node, predicate),
+                    parent_item_id=_find_parent_id(node, predicate,
+                                                     parent_map),
                     linenumber=node.linenumber,
                     file_path=path_str,
                     scheduled=scheduled,

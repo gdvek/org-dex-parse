@@ -1,0 +1,19 @@
+#+TITLE: Tag Inheritance Edge Cases
+#+FILETAGS: :filetag:
+
+* Top item :alpha:
+  :PROPERTIES:
+  :ID: ti-001
+  :END:
+
+** Scaffolding heading :beta:
+
+*** Child through scaffolding :gamma:
+    :PROPERTIES:
+    :ID: ti-002
+    :END:
+
+** Direct child with duplicate tag :alpha:
+   :PROPERTIES:
+   :ID: ti-003
+   :END:

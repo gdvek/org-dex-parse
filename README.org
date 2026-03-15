@@ -175,7 +175,7 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
   │    .deadline                        .end                          │
   │    .closed                          .active                       │
   │    .created                                                        │
-  │    .archived_on                   ClockEntry (frozen)             │
+  │    .archived                      ClockEntry (frozen)             │
   │    .active_ts                       .start                        │
   │    .inactive_ts                     .end                          │
   │    .range_ts                        .duration_minutes             │

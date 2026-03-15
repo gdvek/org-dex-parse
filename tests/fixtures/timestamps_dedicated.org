@@ -73,3 +73,15 @@
   :ID: ts-012
   :CUSTOM_DATE: <2026-07-01 Wed>
   :END:
+
+* Archived date only
+  :PROPERTIES:
+  :ID: ts-013
+  :ARCHIVE_TIME: 2026-07-01 Tue
+  :END:
+
+* Archived malformed
+  :PROPERTIES:
+  :ID: ts-014
+  :ARCHIVE_TIME: archived sometime ago
+  :END:

@@ -125,7 +125,7 @@ class TestItemMinimal:
         assert item.deadline is None
         assert item.closed is None
         assert item.created is None
-        assert item.archived_on is None
+        assert item.archived is None
         assert item.body is None
 
     def test_defaults_empty_tuples(self):
@@ -195,7 +195,7 @@ class TestItemFieldTypes:
             deadline=ts_active,
             closed=ts_inactive,
             created=ts_inactive,
-            archived_on=ts_inactive,
+            archived=ts_inactive,
             active_ts=(ts_active,),
             inactive_ts=(ts_inactive,),
             range_ts=(date_range,),

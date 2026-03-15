@@ -198,7 +198,7 @@ def _parse_timestamp_property(value: str) -> Timestamp | None:
     active flag: True only for <> delimiters, False for [] and bare.
     repeater: always None — property timestamps don't carry repeaters.
 
-    Reusable: S09b-2 (created) and S09b-3 (archived_on) both call this.
+    Reusable: S09b-2 (created) and S09b-3 (archived) both call this.
     """
     m = _RE_TIMESTAMP_PROPERTY.match(value)
     if m is None:
@@ -343,7 +343,7 @@ def parse_file(path: str, config: Config) -> ParseResult:
     predicate = config.item_predicate
 
     # Property names always excluded from Item.properties.
-    # ID → already in item_id; ARCHIVE_TIME → future archived_on;
+    # ID → already in item_id; ARCHIVE_TIME → archived;
     # created_property → future created.  All compared lowercase.
     always_excluded_props = {
         "id", "archive_time", config.created_property.lower()
@@ -412,6 +412,15 @@ def parse_file(path: str, config: Config) -> ParseResult:
                 if created_raw else None
             )
 
+            # -- Archived timestamp (S09b-3) ----------------------------------
+            # ARCHIVE_TIME is written by org-archive-subtree in bare format
+            # (no delimiters).  _parse_timestamp_property handles bare → active=False.
+            archive_raw = node.get_property("ARCHIVE_TIME")
+            archived = (
+                _parse_timestamp_property(archive_raw)
+                if archive_raw else None
+            )
+
             # -- Raw text and links (S06, S09a) --------------------------------
             # Collect raw_text first, then extract links from it.
             # Links operate on raw_text (no zone exclusion) — fix F-LK1.
@@ -429,6 +438,7 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     deadline=deadline,
                     closed=closed,
                     created=created,
+                    archived=archived,
                     raw_text=raw_text,
                     links=_extract_links(raw_text),
                     properties=props,

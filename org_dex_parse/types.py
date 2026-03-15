@@ -132,7 +132,7 @@ class Item:
 
     # Temporal
     created: Timestamp | None = None
-    archived_on: Timestamp | None = None
+    archived: Timestamp | None = None
     active_ts: tuple[Timestamp, ...] = ()
     inactive_ts: tuple[Timestamp, ...] = ()
     range_ts: tuple[Range, ...] = ()

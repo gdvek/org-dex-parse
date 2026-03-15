@@ -17,7 +17,9 @@ from orgparse.node import OrgEnv
 from .config import Config
 from orgparse.date import OrgDate
 
-from .types import ClockEntry, Item, Link, ParseResult, Range, Timestamp
+from .types import (
+    ClockEntry, Item, Link, ParseResult, Range, StateChange, Timestamp,
+)
 
 # Save the original tag regex at import time so we can restore it
 # when extra_tag_chars is not needed.  Used by the HACK(S04) monkey-patch.
@@ -431,6 +433,72 @@ def _collect_clock_walk(
         _collect_clock_walk(child, predicate, entries)
 
 
+# -- State change extraction (S09c-2) ----------------------------------------
+
+# Regex for org-mode state change lines in the LOGBOOK drawer.
+# Format from org-log-note-headings: "State %-12s from %-12S%t"
+# Two variants:
+#   Normal:    - State "DONE"       from "TODO"       [2026-03-10 Tue 10:30]
+#   First:     - State "TODO"       from              [2026-03-10 Tue 10:30]
+# First assignment has no quotes after "from" — the quoted group is optional.
+# The %-12s padding produces variable whitespace, handled by \s+.
+# Note lines (trailing \\) are on subsequent lines and don't affect this regex.
+_RE_STATE_CHANGE = re.compile(
+    r'- State\s+"(?P<to>[^"]+)"\s+'
+    r'from\s+(?:"(?P<from>[^"]+)")?\s*'
+    r'\[(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})'
+    r'\s+\w+'                          # day-of-week, ignored
+    r'(?:\s+(?P<hour>\d{2}):(?P<minute>\d{2}))?'  # optional time
+    r'\]'
+)
+
+
+def _extract_state_changes(text: str) -> tuple[StateChange, ...]:
+    """Extract state changes from an item node's text.
+
+    Parses str(node) — the item's own lines — for state change entries.
+    No walk scaffolding: state changes are the history of this specific
+    heading's TODO keyword, not of its children.  This differs from clock
+    entries (which aggregate time across scaffolding).
+
+    Same approach as remi-org-parse: regex on str(node), no orgparse API.
+
+    Returns entries in chronological order.  The LOGBOOK grows upward
+    (newest first), so matches are in reverse-chronological order.
+    We collect all, then reverse once at the end.
+    """
+    import datetime
+
+    entries: list[StateChange] = []
+    for m in _RE_STATE_CHANGE.finditer(text):
+        year = int(m.group("year"))
+        month = int(m.group("month"))
+        day = int(m.group("day"))
+
+        # Time is always present in org-mode state changes, but we handle
+        # date-only for robustness (AC7): default to midnight.
+        if m.group("hour") is not None:
+            ts = datetime.datetime(year, month, day,
+                                   int(m.group("hour")),
+                                   int(m.group("minute")))
+        else:
+            ts = datetime.datetime(year, month, day, 0, 0)
+
+        # First assignment: "from" without quotes → group is None → None.
+        # Normal: "from" with quotes → captured string.
+        from_state = m.group("from")
+
+        entries.append(StateChange(
+            to_state=m.group("to"),
+            from_state=from_state,
+            timestamp=ts,
+        ))
+
+    # Reverse for chronological order: oldest first.
+    entries.reverse()
+    return tuple(entries)
+
+
 def is_item(node: Any, predicate: Callable[[Any], bool]) -> bool:
     """Unified item boundary check.
 
@@ -646,6 +714,12 @@ def parse_file(path: str, config: Config) -> ParseResult:
             # Uses orgparse's structured node.clock API — no regex.
             clock = _collect_clock(node, predicate)
 
+            # -- State changes (S09c-2) ------------------------------------
+            # Extract from str(node) only — no walk scaffolding.
+            # State changes are the history of this heading's keyword,
+            # not of its children (unlike clock which aggregates time).
+            state_changes = _extract_state_changes(str(node))
+
             items.append(
                 Item(
                     title=node.heading,
@@ -663,6 +737,7 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     inactive_ts=inactive_ts,
                     range_ts=range_ts,
                     clock=clock,
+                    state_changes=state_changes,
                     raw_text=raw_text,
                     links=_extract_links(raw_text),
                     properties=props,

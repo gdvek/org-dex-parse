@@ -1,0 +1,91 @@
+#+TITLE: State Changes
+#+TODO: TODO DOING DONE
+
+* DONE Item with normal state changes
+  :PROPERTIES:
+  :ID: sc-001
+  :END:
+  :LOGBOOK:
+  - State "DONE"       from "DOING"      [2026-03-12 Thu 16:00]
+  - State "DOING"      from "TODO"       [2026-03-10 Tue 09:00]
+  :END:
+  Body text.
+
+* TODO Item with first assignment
+  :PROPERTIES:
+  :ID: sc-002
+  :END:
+  :LOGBOOK:
+  - State "TODO"       from              [2026-03-08 Sun 20:00]
+  :END:
+
+* DONE Item with multiple state changes
+  :PROPERTIES:
+  :ID: sc-003
+  :END:
+  :LOGBOOK:
+  - State "DONE"       from "DOING"      [2026-03-15 Sun 14:00]
+  - State "DOING"      from "TODO"       [2026-03-12 Thu 09:30]
+  - State "TODO"       from              [2026-03-10 Tue 08:00]
+  :END:
+
+* Item with no state changes
+  :PROPERTIES:
+  :ID: sc-004
+  :END:
+  Just a body, no LOGBOOK.
+
+* Item with no state changes but LOGBOOK
+  :PROPERTIES:
+  :ID: sc-005
+  :END:
+  :LOGBOOK:
+  CLOCK: [2026-03-10 Tue 09:00]--[2026-03-10 Tue 10:30] =>  1:30
+  :END:
+
+* DONE Item with scaffolding
+  :PROPERTIES:
+  :ID: sc-006
+  :END:
+  :LOGBOOK:
+  - State "DONE"       from "TODO"       [2026-03-14 Sat 12:00]
+  :END:
+  Parent body.
+** TODO Scaffold child with own state change
+   :LOGBOOK:
+   - State "TODO"       from              [2026-03-13 Thu 10:00]
+   :END:
+   Scaffold body.
+
+* DONE Item with sub-item
+  :PROPERTIES:
+  :ID: sc-007
+  :END:
+  :LOGBOOK:
+  - State "DONE"       from "TODO"       [2026-03-14 Sat 15:00]
+  :END:
+** DONE Sub-item
+   :PROPERTIES:
+   :ID: sc-007-sub
+   :END:
+   :LOGBOOK:
+   - State "DONE"       from "TODO"       [2026-03-13 Thu 11:00]
+   :END:
+
+* DONE Item with state change and body ts
+  :PROPERTIES:
+  :ID: sc-008
+  :END:
+  :LOGBOOK:
+  - State "DONE"       from "TODO"       [2026-03-10 Tue 10:30]
+  :END:
+  Real ts in body: [2026-05-01 Fri].
+
+* DONE Item with note after state change
+  :PROPERTIES:
+  :ID: sc-009
+  :END:
+  :LOGBOOK:
+  - State "DONE"       from "TODO"       [2026-03-11 Wed 14:00] \\
+    Completed the review and all tests pass.
+  :END:

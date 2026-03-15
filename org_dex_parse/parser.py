@@ -197,6 +197,18 @@ def _orgdate_to_range(od: Any) -> Range:
 # block rather than filtering individual line types, because the LOGBOOK can
 # contain many entry types (- Refiled on, - CAPTURED ON, - Note taken on, etc.)
 # beyond just CLOCK and State.
+#
+# LIMITATION (S09b-5): this filter is hardcoded on the drawer name "LOGBOOK",
+# which is the default when org-log-into-drawer = t.  Two alternative org-mode
+# configurations are NOT supported:
+#   1. Custom drawer name (org-log-into-drawer = a string, e.g. "CLOCKING")
+#      → logging data ends up in a drawer we don't filter.
+#   2. Inline logging (org-log-into-drawer = nil) → state changes, Refiled,
+#      Captured, Note entries stay in _body_lines unfiltered.
+# In both cases, logging timestamps would appear as false positives in
+# inactive_ts.  This is acceptable for now — the standard LOGBOOK covers
+# the common case.  If custom drawer support is needed, the natural evolution
+# is a Config.log_drawer field (str | None, default "LOGBOOK").
 _RE_LOGBOOK_START = re.compile(r'^\s*:LOGBOOK:\s*$')
 _RE_DRAWER_END = re.compile(r'^\s*:END:\s*$')
 

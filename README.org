@@ -193,6 +193,13 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
   - =org-dex= — indexing engine (primary consumer)
   - CLI tools — batch analysis, validation
 
+* Limitations
+  - *LOGBOOK drawer name is hardcoded.*  The timestamp filter excludes the
+    =:LOGBOOK:...:END:= drawer (the default when =org-log-into-drawer= is =t=).
+    Custom drawer names (=org-log-into-drawer= set to a string) and inline
+    logging (=org-log-into-drawer= = =nil=) are not supported — logging
+    timestamps would leak into =inactive_ts= as false positives.
+
 * Development
   #+begin_src sh
     cd org-dex-parse/

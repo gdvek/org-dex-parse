@@ -170,6 +170,60 @@ def _orgdate_to_timestamp(od: Any) -> Timestamp:
     )
 
 
+# -- Timestamp property parsing (S09b-2) ---------------------------------------
+
+# Regex for org-mode timestamp in a property value.  Handles three forms:
+#   - active:   <2026-03-01 Sun 14:30>
+#   - inactive: [2026-03-01 Sun 14:30]
+#   - bare:     2026-03-01 Sun 14:30
+# Day-of-week is optional and ignored.  Time (HH:MM) is optional — when
+# absent, date is datetime.date; when present, datetime.datetime.
+# Named groups: open (delimiter), year/month/day, hour/minute, close.
+_RE_TIMESTAMP_PROPERTY = re.compile(
+    r'^\s*(?P<open>[<\[])?'                  # optional opening delimiter
+    r'\s*(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})'  # YYYY-MM-DD
+    r'(?:\s+\w+)?'                           # optional day-of-week (ignored)
+    r'(?:\s+(?P<hour>\d{2}):(?P<minute>\d{2}))?'  # optional HH:MM
+    r'\s*(?:[>\]])?'                         # optional closing delimiter
+    r'\s*$'
+)
+
+
+def _parse_timestamp_property(value: str) -> Timestamp | None:
+    """Parse a timestamp string from an org property value.
+
+    Handles active (<>), inactive ([]), and bare (no delimiters) forms.
+    Returns None on malformed input (regex no match).
+
+    active flag: True only for <> delimiters, False for [] and bare.
+    repeater: always None — property timestamps don't carry repeaters.
+
+    Reusable: S09b-2 (created) and S09b-3 (archived_on) both call this.
+    """
+    m = _RE_TIMESTAMP_PROPERTY.match(value)
+    if m is None:
+        return None
+
+    year = int(m.group("year"))
+    month = int(m.group("month"))
+    day = int(m.group("day"))
+
+    # Time component determines date vs datetime (AC5/AC6).
+    if m.group("hour") is not None:
+        import datetime
+        date = datetime.datetime(year, month, day,
+                                 int(m.group("hour")),
+                                 int(m.group("minute")))
+    else:
+        import datetime
+        date = datetime.date(year, month, day)
+
+    # Active only when explicitly delimited with <> (AC7).
+    active = m.group("open") == "<"
+
+    return Timestamp(date=date, active=active, repeater=None)
+
+
 def is_item(node: Any, predicate: Callable[[Any], bool]) -> bool:
     """Unified item boundary check.
 
@@ -348,6 +402,16 @@ def parse_file(path: str, config: Config) -> ParseResult:
                 if node.closed else None
             )
 
+            # -- Created timestamp (S09b-2) ------------------------------------
+            # Read from the configurable property (default "CREATED").
+            # node.get_property accesses only the direct PROPERTIES drawer,
+            # not children — same mechanism as :ID: and :Type:.
+            created_raw = node.get_property(config.created_property)
+            created = (
+                _parse_timestamp_property(created_raw)
+                if created_raw else None
+            )
+
             # -- Raw text and links (S06, S09a) --------------------------------
             # Collect raw_text first, then extract links from it.
             # Links operate on raw_text (no zone exclusion) — fix F-LK1.
@@ -364,6 +428,7 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     scheduled=scheduled,
                     deadline=deadline,
                     closed=closed,
+                    created=created,
                     raw_text=raw_text,
                     links=_extract_links(raw_text),
                     properties=props,

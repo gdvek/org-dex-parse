@@ -49,3 +49,27 @@
   :PROPERTIES:
   :ID: ts-008
   :END:
+
+* Bare created no dow
+  :PROPERTIES:
+  :ID: ts-009
+  :CREATED: 2026-06-01
+  :END:
+
+* Bare created with time and dow
+  :PROPERTIES:
+  :ID: ts-010
+  :CREATED: 2026-06-15 Sun 08:45
+  :END:
+
+* Malformed created
+  :PROPERTIES:
+  :ID: ts-011
+  :CREATED: sometime in March
+  :END:
+
+* Custom property name
+  :PROPERTIES:
+  :ID: ts-012
+  :CUSTOM_DATE: <2026-07-01 Wed>
+  :END:

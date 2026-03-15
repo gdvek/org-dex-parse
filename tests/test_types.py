@@ -52,7 +52,7 @@ class TestFrozen:
             ts.active = False
 
     def test_link_frozen(self):
-        link = Link(target="abc", type="id")
+        link = Link(target="abc")
         with pytest.raises(FrozenInstanceError):
             link.target = "xyz"
 
@@ -164,8 +164,8 @@ class TestItemFieldTypes:
         ts_inactive = Timestamp(
             date=datetime.date(2026, 1, 10), active=False
         )
-        link = Link(target="abc-123", type="id", description="My note")
-        web_link = Link(target="example.com", type="https")
+        link = Link(target="id:abc-123", description="My note")
+        web_link = Link(target="https://example.com")
         clock = ClockEntry(
             start=datetime.datetime(2026, 3, 13, 9, 0),
             end=datetime.datetime(2026, 3, 13, 10, 30),
@@ -243,12 +243,8 @@ class TestItemFieldTypes:
         assert sc.from_state is None
 
     def test_link_no_description(self):
-        link = Link(target="uuid-123", type="id")
+        link = Link(target="uuid-123")
         assert link.description is None
-
-    def test_link_no_schema(self):
-        link = Link(target="some heading", type="")
-        assert link.type == ""
 
 
 # --- AC7: ParseResult ---

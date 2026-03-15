@@ -29,15 +29,15 @@ class Timestamp:
 class Link:
     """A single org-mode link.
 
-    :arg target: The link target after the schema (e.g. ``"abc-123"``
-        for ``[[id:abc-123]]``).
-    :arg type: The link schema/protocol (e.g. ``"id"``, ``"https"``).
-        Empty string for schema-less links.
+    :arg target: The raw link target as it appears inside ``[[...]]``
+        in org-mode.  For ``[[id:abc-123]]`` this is ``"id:abc-123"``.
+        For ``[[https://example.com]]`` this is ``"https://example.com"``.
+        For fuzzy links ``[[Some heading]]`` this is ``"Some heading"``.
+        No decomposition: the consumer extracts the schema if needed.
     :arg description: Display text from ``[description]``, or None.
     """
 
     target: str
-    type: str
     description: str | None = None
 
 

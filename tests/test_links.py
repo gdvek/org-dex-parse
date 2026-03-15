@@ -32,13 +32,13 @@ def _parse() -> dict[str, Item]:
 class TestOrgLinkWithDescription:
 
     def test_https_link_with_description(self):
-        """AC1: [[https://example.com][Example]] extracts target, type, desc."""
+        """AC1: [[https://example.com][Example]] extracts raw target and desc."""
         items = _parse()
         links = items["lnk-001"].links
-        https_links = [lk for lk in links if lk.target == "example.com"]
+        https_links = [lk for lk in links
+                       if lk.target == "https://example.com"]
         assert len(https_links) == 1
         lk = https_links[0]
-        assert lk.type == "https"
         assert lk.description == "Example"
 
 
@@ -47,12 +47,11 @@ class TestOrgLinkWithDescription:
 class TestOrgLinkWithoutDescription:
 
     def test_id_link_no_description(self):
-        """AC2: [[id:abc-123]] → description=None."""
+        """AC2: [[id:abc-123]] → description=None, target='id:abc-123'."""
         items = _parse()
         links = items["lnk-001"].links
-        id_links = [lk for lk in links if lk.target == "abc-123"]
+        id_links = [lk for lk in links if lk.target == "id:abc-123"]
         assert len(id_links) == 1
-        assert id_links[0].type == "id"
         assert id_links[0].description is None
 
 
@@ -61,12 +60,12 @@ class TestOrgLinkWithoutDescription:
 class TestBareUrl:
 
     def test_bare_url_extracted(self):
-        """AC3: bare https:// URL extracted with type='https'."""
+        """AC3: bare https:// URL extracted with full URL as target."""
         items = _parse()
         links = items["lnk-001"].links
-        bare = [lk for lk in links if lk.target == "bare.example.com/path"]
+        bare = [lk for lk in links
+                if lk.target == "https://bare.example.com/path"]
         assert len(bare) == 1
-        assert bare[0].type == "https"
         assert bare[0].description is None
 
 
@@ -78,17 +77,17 @@ class TestBareUrlPunctuation:
         """AC4: trailing comma stripped from bare URL."""
         items = _parse()
         links = items["lnk-001"].links
-        page_links = [lk for lk in links if "example.com/page" in lk.target]
+        page_links = [lk for lk in links
+                      if lk.target == "https://example.com/page"]
         assert len(page_links) == 1
-        assert page_links[0].target == "example.com/page"
 
     def test_trailing_paren_stripped(self):
         """AC4: trailing ')' stripped from bare URL."""
         items = _parse()
         links = items["lnk-001"].links
-        paren_links = [lk for lk in links if "example.com/paren" in lk.target]
+        paren_links = [lk for lk in links
+                       if lk.target == "https://example.com/paren"]
         assert len(paren_links) == 1
-        assert paren_links[0].target == "example.com/paren"
 
 
 # -- AC5: deduplication (bare URL inside org link) ----------------------------
@@ -110,7 +109,7 @@ class TestDedup:
         items = _parse()
         links = items["lnk-003"].links
         dedup_links = [lk for lk in links
-                       if lk.target == "dedup.example.com/page"]
+                       if lk.target == "https://dedup.example.com/page"]
         # Org link (pass 1) + bare URL on separate line (pass 2, no overlap)
         assert len(dedup_links) == 2
         # One has description, one doesn't
@@ -118,73 +117,74 @@ class TestDedup:
         assert descs == {"Dedup", None}
 
 
-# -- AC6, AC10: schema parsing -----------------------------------------------
+# -- AC6: schema in target ----------------------------------------------------
 
-class TestSchemaParsing:
+class TestSchemaInTarget:
 
-    def test_schema_id(self):
-        """AC6: [[id:abc-123]] → type='id', target='abc-123'."""
+    def test_id_link(self):
+        """AC6: [[id:abc-123]] → target='id:abc-123'."""
         items = _parse()
         links = items["lnk-001"].links
-        lk = next(lk for lk in links if lk.target == "abc-123")
-        assert lk.type == "id"
+        lk = next(lk for lk in links if lk.target == "id:abc-123")
+        assert lk.description is None
 
-    def test_schema_mailto(self):
-        """AC10: [[mailto:user@example.com]] → type='mailto'."""
-        items = _parse()
-        links = items["lnk-001"].links
-        lk = next(lk for lk in links if lk.target == "user@example.com")
-        assert lk.type == "mailto"
-        assert lk.description == "mail"
-
-    def test_schema_info(self):
-        """AC10: [[info:emacs#Top]] → type='info'."""
-        items = _parse()
-        links = items["lnk-001"].links
-        lk = next(lk for lk in links if lk.target == "emacs#Top")
-        assert lk.type == "info"
-
-    def test_schema_file(self):
-        """AC10: [[file:/tmp/test.org]] → type='file'."""
-        items = _parse()
-        links = items["lnk-001"].links
-        lk = next(lk for lk in links if lk.target == "/tmp/test.org")
-        assert lk.type == "file"
-
-    def test_schema_elisp(self):
-        """AC10: [[elisp:(message "hi")]] → type='elisp'."""
+    def test_mailto_link(self):
+        """AC10: [[mailto:user@example.com]] → target='mailto:user@example.com'."""
         items = _parse()
         links = items["lnk-001"].links
         lk = next(lk for lk in links
-                  if lk.type == "elisp")
-        assert lk.target == '(message "hi")'
+                  if lk.target == "mailto:user@example.com")
+        assert lk.description == "mail"
 
-    def test_schema_doi(self):
-        """AC10: [[doi:10.1000/test]] → type='doi'."""
+    def test_info_link(self):
+        """AC10: [[info:emacs#Top]] → target='info:emacs#Top'."""
         items = _parse()
         links = items["lnk-001"].links
-        lk = next(lk for lk in links if lk.target == "10.1000/test")
-        assert lk.type == "doi"
+        lk = next(lk for lk in links if lk.target == "info:emacs#Top")
+        assert lk.description == "Emacs manual"
 
-    def test_schema_shell(self):
-        """AC10: [[shell:ls -la]] → type='shell'."""
+    def test_file_link(self):
+        """AC10: [[file:/tmp/test.org]] → target='file:/tmp/test.org'."""
         items = _parse()
         links = items["lnk-001"].links
-        lk = next(lk for lk in links if lk.type == "shell")
-        assert lk.target == "ls -la"
+        lk = next(lk for lk in links
+                  if lk.target == "file:/tmp/test.org")
+        assert lk.description == "local file"
+
+    def test_elisp_link(self):
+        """AC10: [[elisp:(message "hi")]] → target='elisp:(message "hi")'."""
+        items = _parse()
+        links = items["lnk-001"].links
+        lk = next(lk for lk in links
+                  if lk.target == 'elisp:(message "hi")')
+        assert lk.description == "run"
+
+    def test_doi_link(self):
+        """AC10: [[doi:10.1000/test]] → target='doi:10.1000/test'."""
+        items = _parse()
+        links = items["lnk-001"].links
+        lk = next(lk for lk in links if lk.target == "doi:10.1000/test")
+        assert lk.description is None
+
+    def test_shell_link(self):
+        """AC10: [[shell:ls -la]] → target='shell:ls -la'."""
+        items = _parse()
+        links = items["lnk-001"].links
+        lk = next(lk for lk in links if lk.target == "shell:ls -la")
+        assert lk.description is None
 
 
 # -- AC7: fuzzy link ----------------------------------------------------------
 
 class TestFuzzyLink:
 
-    def test_fuzzy_link_not_split_on_colon(self):
-        """AC7: [[Heading: with colon]] → type='', target intact (fix F-LK2)."""
+    def test_fuzzy_link_preserved_intact(self):
+        """AC7: [[Heading: with colon]] → target='Heading: with colon' (fix F-LK2)."""
         items = _parse()
         links = items["lnk-001"].links
-        fuzzy = [lk for lk in links if lk.type == ""]
+        fuzzy = [lk for lk in links
+                 if lk.target == "Heading: with colon"]
         assert len(fuzzy) == 1
-        assert fuzzy[0].target == "Heading: with colon"
         assert fuzzy[0].description is None
 
 
@@ -201,9 +201,9 @@ class TestLinksFromDrawer:
         """
         items = _parse()
         links = items["lnk-004"].links
-        drawer_links = [lk for lk in links if lk.target == "inside-drawer"]
+        drawer_links = [lk for lk in links
+                        if lk.target == "id:inside-drawer"]
         assert len(drawer_links) == 1
-        assert drawer_links[0].type == "id"
 
 
 # -- AC9: scaffolding links contribute to parent -----------------------------
@@ -219,9 +219,9 @@ class TestScaffoldingLinks:
         """
         items = _parse()
         links = items["lnk-002"].links
-        scaff = [lk for lk in links if lk.target == "from-scaffolding"]
+        scaff = [lk for lk in links
+                 if lk.target == "id:from-scaffolding"]
         assert len(scaff) == 1
-        assert scaff[0].type == "id"
 
 
 # -- AC11: link order --------------------------------------------------------
@@ -232,15 +232,18 @@ class TestLinkOrder:
         """AC11: links appear in order of occurrence in raw_text."""
         items = _parse()
         links = items["lnk-001"].links
-        types_in_order = [lk.type for lk in links]
+        targets_in_order = [lk.target for lk in links]
         # Expected order from the fixture:
-        # https (example.com), id (abc-123), "" (fuzzy),
+        # https (example.com), id (abc-123), fuzzy,
         # https (bare), https (page), https (paren),
         # mailto, info, file, elisp, doi, shell
-        assert types_in_order == [
-            "https", "id", "",
-            "https", "https", "https",
-            "mailto", "info", "file", "elisp", "doi", "shell",
+        assert targets_in_order == [
+            "https://example.com", "id:abc-123", "Heading: with colon",
+            "https://bare.example.com/path",
+            "https://example.com/page", "https://example.com/paren",
+            "mailto:user@example.com", "info:emacs#Top",
+            "file:/tmp/test.org", 'elisp:(message "hi")',
+            "doi:10.1000/test", "shell:ls -la",
         ]
 
 
@@ -299,22 +302,19 @@ class TestBracketInDescription:
         """F-LK4: [[id:x][[] Title]] — empty brackets prefix."""
         items = _parse()
         lk = next(lk for lk in items["lnk-005"].links
-                  if lk.target == "flk4-emoji")
-        assert lk.type == "id"
+                  if lk.target == "id:flk4-emoji")
         assert lk.description == "[] Titolo con emoji"
 
     def test_type_prefix_in_description(self):
         """F-LK4: [[id:x][[DECLARATION] Title]] — type prefix."""
         items = _parse()
         lk = next(lk for lk in items["lnk-005"].links
-                  if lk.target == "flk4-type")
-        assert lk.type == "id"
+                  if lk.target == "id:flk4-type")
         assert lk.description == "[DECLARATION] Titolo con tipo"
 
     def test_single_bracket_in_description(self):
         """F-LK4: [[id:x][Text ] in middle]] — lone ] mid-description."""
         items = _parse()
         lk = next(lk for lk in items["lnk-005"].links
-                  if lk.target == "flk4-single")
-        assert lk.type == "id"
+                  if lk.target == "id:flk4-single")
         assert lk.description == "Testo ] nel mezzo"

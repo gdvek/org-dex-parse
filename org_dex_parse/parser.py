@@ -47,47 +47,9 @@ _RE_ORG_LINK = re.compile(
 # Pass 2: bare URLs — http:// or https://.
 _RE_BARE_URL = re.compile(r'https?://[^\s\[\]<>]+')
 
-# Standard org-mode link schemas.  If the target starts with one of
-# these followed by ':', we split into type + target.  Everything else
-# is a fuzzy link (type="", target unchanged) — never split on ':'
-# without verifying the schema (fix F-LK2).
-_ORG_SCHEMAS = frozenset({
-    "id", "file", "file+sys", "file+emacs",
-    "https", "http", "ftp",
-    "mailto", "info", "shell", "elisp",
-    "doi", "news", "nntp", "irc",
-    "mhe", "rmail", "gnus", "bbdb",
-    "eww", "docview", "notmuch", "mu4e",
-    "attachment",
-})
-
 # Characters stripped from the end of bare URLs (trailing punctuation
 # that is syntactically part of the surrounding sentence, not the URL).
 _BARE_URL_TRAILING = set(",;:)")
-
-
-def _parse_link_target(raw_target: str) -> tuple[str, str]:
-    """Split a raw org-link target into (type, target).
-
-    If the target starts with a recognized schema followed by ':',
-    returns (schema, rest).  Otherwise returns ("", raw_target) —
-    the link is fuzzy and the target is preserved intact (fix F-LK2).
-
-    For URL-style schemas (https://, http://, ftp://, etc.), the
-    authority separator '//' is stripped from the target — it is
-    structural, not part of the resource identifier.  Non-URL schemas
-    (id:, mailto:, file:) have no '//' and are unaffected.
-    """
-    colon = raw_target.find(":")
-    if colon > 0:
-        candidate = raw_target[:colon]
-        if candidate in _ORG_SCHEMAS:
-            rest = raw_target[colon + 1:]
-            # Strip '://' → '//' from URL-style schemas.
-            if rest.startswith("//"):
-                rest = rest[2:]
-            return candidate, rest
-    return "", raw_target
 
 
 def _extract_links(text: str) -> tuple[Link, ...]:
@@ -113,8 +75,7 @@ def _extract_links(text: str) -> tuple[Link, ...]:
     for m in _RE_ORG_LINK.finditer(text):
         raw_target = m.group(1)
         description = m.group(2)  # None if no [desc] part
-        link_type, target = _parse_link_target(raw_target)
-        found.append((m.start(), Link(target=target, type=link_type,
+        found.append((m.start(), Link(target=raw_target,
                                       description=description)))
         occupied.append((m.start(), m.end()))
 
@@ -131,10 +92,8 @@ def _extract_links(text: str) -> tuple[Link, ...]:
         while url and url[-1] in _BARE_URL_TRAILING:
             url = url[:-1]
 
-        # Bare URLs always have a schema (http or https).
-        link_type, target = _parse_link_target(url)
-        found.append((bare_start, Link(target=target, type=link_type,
-                                       description=None)))
+        # Bare URLs are stored as-is (complete URL).
+        found.append((bare_start, Link(target=url, description=None)))
 
     # Sort by position for document order (AC11).
     found.sort(key=lambda x: x[0])

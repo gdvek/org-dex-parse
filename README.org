@@ -124,9 +124,10 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
    remi-org-db, where =tag_category()= classifies at indexing time.
 
    *Links:* extracted as =.links: tuple[Link, ...]=.  Each =Link= carries
-   =.type= (the schema, e.g. ="id"=, ="https"=, ="file"=, =""= for fuzzy)
-   and =.target=.  The consumer groups them into categories (org, web,
-   image, etc.) as needed.
+   =.target= (the raw link target as it appears inside =[[...]]=, e.g.
+   ="id:abc-123"=, ="https://example.com"=, ="Some heading"= for fuzzy)
+   and =.description=.  The consumer extracts the schema and groups links
+   into categories as needed.
 
    remi-org-parse classified links into 6 hardcoded categories (including
    =excalidraw_links=, specific to one workflow).  org-dex-parse removes
@@ -161,8 +162,8 @@ discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regre
   │  Data types                                                        │
   │  ──────────                                                        │
   │  Item (frozen, 24 fields)         Link (frozen)                   │
-  │    .title                           .target                       │
-  │    .item_id                         .type  ← schema, e.g. "id"   │
+  │    .title                           .target  ← raw, e.g.         │
+  │    .item_id                            "id:abc-123"               │
   │    .todo                            .description                  │
   │    .priority                                                       │
   │    .level                         Timestamp (frozen)              │

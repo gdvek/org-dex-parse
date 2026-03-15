@@ -1,0 +1,86 @@
+#+TITLE: Timestamp Generic Fields
+#+TODO: TODO | DONE
+
+* Item with active ts
+  :PROPERTIES:
+  :ID: gen-001
+  :END:
+  Meeting on <2026-05-01 Fri>.
+
+* Item with inactive ts
+  :PROPERTIES:
+  :ID: gen-002
+  :END:
+  Created sometime around [2026-03-01 Sun].
+
+* Item with range
+  :PROPERTIES:
+  :ID: gen-003
+  :END:
+  Conference <2026-06-01 Mon>--<2026-06-03 Wed>.
+
+* Item no generics
+  SCHEDULED: <2026-04-01 Wed>
+  :PROPERTIES:
+  :ID: gen-004
+  :CREATED: [2026-03-01 Sun]
+  :END:
+  Body senza timestamp.
+
+* Item with planning not duplicated
+  SCHEDULED: <2026-04-01 Wed> DEADLINE: <2026-04-15 Wed>
+  :PROPERTIES:
+  :ID: gen-005
+  :CREATED: [2026-03-01 Sun]
+  :END:
+  But also <2026-07-01 Tue> in body.
+
+* Heading ts <2026-08-01 Fri> inline
+  :PROPERTIES:
+  :ID: gen-006
+  :END:
+
+* Item with link desc ts
+  :PROPERTIES:
+  :ID: gen-007
+  :END:
+  See [[https://example.com][2026-01-15 report]].
+  Real ts: <2026-09-01 Mon>.
+
+* Item with scaffolding
+  :PROPERTIES:
+  :ID: gen-008
+  :END:
+  Body of parent.
+** Scaffold heading <2026-10-01 Thu>
+   SCHEDULED: <2026-10-15 Wed>
+   Text with [2026-11-01 Sat].
+
+* TODO Item with CLOCK and SC
+  :PROPERTIES:
+  :ID: gen-009
+  :END:
+  Real ts in body: <2026-12-01 Mon>.
+  :LOGBOOK:
+  CLOCK: [2026-03-10 Tue 09:00]--[2026-03-10 Tue 10:30] =>  1:30
+  - State "DONE"       from "TODO"       [2026-03-10 Tue 10:30]
+  :END:
+
+* Item with repeater and time
+  :PROPERTIES:
+  :ID: gen-010
+  :END:
+  Weekly: <2026-04-01 Wed 14:30 +1w>.
+  Date only: <2026-05-01 Fri>.
+
+* Item with inactive range
+  :PROPERTIES:
+  :ID: gen-011
+  :END:
+  Vacation [2026-07-01 Wed]--[2026-07-14 Wed].
+
+* Item order test
+  :PROPERTIES:
+  :ID: gen-012
+  :END:
+  First <2026-01-01 Wed> then [2026-02-01 Sat] then <2026-03-01 Sat>--<2026-03-05 Wed>.

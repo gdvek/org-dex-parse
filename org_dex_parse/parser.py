@@ -15,7 +15,9 @@ import orgparse.node as _orgparse_node
 from orgparse.node import OrgEnv
 
 from .config import Config
-from .types import Item, Link, ParseResult, Timestamp
+from orgparse.date import OrgDate
+
+from .types import Item, Link, ParseResult, Range, Timestamp
 
 # Save the original tag regex at import time so we can restore it
 # when extra_tag_chars is not needed.  Used by the HACK(S04) monkey-patch.
@@ -168,6 +170,148 @@ def _orgdate_to_timestamp(od: Any) -> Timestamp:
         active=od.is_active(),
         repeater=_repeater_to_str(od),
     )
+
+
+def _orgdate_to_range(od: Any) -> Range:
+    """Convert an orgparse OrgDate with end to our Range type.
+
+    Uses _orgdate_to_timestamp for the start (preserving repeater),
+    and builds the end Timestamp directly (ranges don't carry repeaters
+    on the end component).  active reflects the bracket type.
+
+    Used for generic timestamps (S09b-4).
+    """
+    return Range(
+        start=_orgdate_to_timestamp(od),
+        end=Timestamp(date=od.end, active=od.is_active(), repeater=None),
+        active=od.is_active(),
+    )
+
+
+# -- Generic timestamp extraction (S09b-4) ------------------------------------
+
+# Drawer delimiters for LOGBOOK exclusion from _body_lines.
+# The LOGBOOK drawer contains structured logging data (CLOCK, state changes,
+# refile entries, capture entries, notes) — all with timestamps that must NOT
+# appear in generic timestamp fields.  We exclude the entire :LOGBOOK:...:END:
+# block rather than filtering individual line types, because the LOGBOOK can
+# contain many entry types (- Refiled on, - CAPTURED ON, - Note taken on, etc.)
+# beyond just CLOCK and State.
+_RE_LOGBOOK_START = re.compile(r'^\s*:LOGBOOK:\s*$')
+_RE_DRAWER_END = re.compile(r'^\s*:END:\s*$')
+
+
+def _strip_link_descriptions(text: str) -> str:
+    """Remove descriptions from org links before timestamp extraction.
+
+    Replaces [[target][description]] with [[target]], so that
+    timestamp-like text in descriptions (e.g. [[url][2026-01-15 report]])
+    is not falsely extracted by OrgDate.list_from_str.  Fix for F-TS3.
+    """
+    return _RE_ORG_LINK.sub(lambda m: f"[[{m.group(1)}]]", text)
+
+
+def _collect_timestamps(
+    node: Any, predicate: Callable[[Any], bool]
+) -> tuple[tuple[Timestamp, ...], tuple[Timestamp, ...], tuple[Range, ...]]:
+    """Collect generic timestamps from an item's scope.
+
+    Walks the item subtree node-by-node (same pattern as _collect_raw_text):
+    includes the item node itself, recurses into non-item children, skips
+    item children.
+
+    For each node, extracts timestamps from two structured sources:
+    1. node.heading — timestamps in the heading line
+    2. node._body_lines — body text with planning and PROPERTIES already
+       excluded by orgparse, further filtered to exclude the :LOGBOOK:
+       drawer (CLOCK, state changes, refile, capture, note entries)
+
+    For scaffolding nodes (non-root), planning timestamps become generics:
+    SCHEDULED/DEADLINE → active_ts, CLOSED → inactive_ts.
+
+    Returns (active_ts, inactive_ts, range_ts) in document order.
+    """
+    active: list[Timestamp] = []
+    inactive: list[Timestamp] = []
+    ranges: list[Range] = []
+
+    _collect_timestamps_walk(node, predicate, active, inactive, ranges,
+                             is_item_node=True)
+
+    return tuple(active), tuple(inactive), tuple(ranges)
+
+
+def _classify_orgdate(
+    od: Any,
+    active: list[Timestamp],
+    inactive: list[Timestamp],
+    ranges: list[Range],
+) -> None:
+    """Classify an OrgDate into the appropriate list.
+
+    has_end() → Range, is_active() → active_ts, else → inactive_ts.
+    """
+    if od.has_end():
+        ranges.append(_orgdate_to_range(od))
+    elif od.is_active():
+        active.append(_orgdate_to_timestamp(od))
+    else:
+        inactive.append(_orgdate_to_timestamp(od))
+
+
+def _collect_timestamps_walk(
+    node: Any,
+    predicate: Callable[[Any], bool],
+    active: list[Timestamp],
+    inactive: list[Timestamp],
+    ranges: list[Range],
+    is_item_node: bool = False,
+) -> None:
+    """Recursive walk for timestamp collection.
+
+    is_item_node distinguishes the item itself (planning → dedicated fields)
+    from scaffolding nodes (planning → generic timestamps).
+    """
+    # Source 1: heading — timestamps in the heading line.
+    heading_text = _strip_link_descriptions(node.heading)
+    for od in OrgDate.list_from_str(heading_text):
+        _classify_orgdate(od, active, inactive, ranges)
+
+    # Source 2: _body_lines — planning and PROPERTIES already excluded
+    # by orgparse.  Exclude the entire :LOGBOOK: drawer (CLOCK, state
+    # changes, refile/capture/note entries — all logging data with
+    # timestamps that belong to dedicated fields, not generics).
+    body_lines: list[str] = []
+    in_logbook = False
+    for line in node._body_lines:
+        if not in_logbook and _RE_LOGBOOK_START.match(line):
+            in_logbook = True
+            continue
+        if in_logbook:
+            if _RE_DRAWER_END.match(line):
+                in_logbook = False
+            continue
+        body_lines.append(line)
+    body_text = _strip_link_descriptions("\n".join(body_lines))
+    for od in OrgDate.list_from_str(body_text):
+        _classify_orgdate(od, active, inactive, ranges)
+
+    # Scaffolding planning → generic timestamps.
+    # The item's own planning is in dedicated fields (S09b-1); scaffolding
+    # planning has no dedicated destination, so it becomes generic.
+    if not is_item_node:
+        if node.scheduled:
+            _classify_orgdate(node.scheduled, active, inactive, ranges)
+        if node.deadline:
+            _classify_orgdate(node.deadline, active, inactive, ranges)
+        if node.closed:
+            _classify_orgdate(node.closed, active, inactive, ranges)
+
+    # Recurse into non-item children (scaffolding).
+    for child in node.children:
+        if is_item(child, predicate):
+            continue
+        _collect_timestamps_walk(child, predicate, active, inactive, ranges)
 
 
 # -- Timestamp property parsing (S09b-2) ---------------------------------------
@@ -426,6 +570,14 @@ def parse_file(path: str, config: Config) -> ParseResult:
             # Links operate on raw_text (no zone exclusion) — fix F-LK1.
             raw_text = _collect_raw_text(node, predicate)
 
+            # -- Generic timestamps (S09b-4) --------------------------------
+            # Walk the item subtree node-by-node, extracting from heading
+            # and filtered _body_lines.  Excludes planning, PROPERTIES,
+            # CLOCK, and state-change lines.
+            active_ts, inactive_ts, range_ts = _collect_timestamps(
+                node, predicate
+            )
+
             items.append(
                 Item(
                     title=node.heading,
@@ -439,6 +591,9 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     closed=closed,
                     created=created,
                     archived=archived,
+                    active_ts=active_ts,
+                    inactive_ts=inactive_ts,
+                    range_ts=range_ts,
                     raw_text=raw_text,
                     links=_extract_links(raw_text),
                     properties=props,

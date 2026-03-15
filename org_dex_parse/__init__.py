@@ -3,6 +3,7 @@
 __version__ = "0.1.0"
 
 from org_dex_parse.config import Config
+from org_dex_parse.evaluator import compile_predicate
 from org_dex_parse.parser import parse_file
 from org_dex_parse.types import (
     ClockEntry,
@@ -15,6 +16,7 @@ from org_dex_parse.types import (
 )
 
 __all__ = [
+    "compile_predicate",
     "Config",
     "ClockEntry",
     "Item",

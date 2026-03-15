@@ -18,9 +18,13 @@ class Config:
     The caller constructs this with TODO keywords, tag rules, and
     exclusion lists matching their org-mode environment.
 
-    :arg item_predicate: Function ``(headline) -> bool`` that determines
-        which headings (that already have ``:ID:``) are items.
-        Default: ``lambda h: True`` (any heading with ``:ID:``).
+    :arg item_predicate: Determines which headings (that already have
+        ``:ID:``) are items.  Accepts three forms:
+        - ``Callable[[Any], bool]`` — a Python function (backward compat)
+        - ``list`` — a JSON-like s-expression compiled via the evaluator
+          (e.g. ``["property", "Type"]``)
+        - ``None`` — default predicate (any heading with ``:ID:``).
+        After ``__post_init__``, always stored as a callable.
     :arg todos: Active (unfinished) TODO keywords.
     :arg dones: Terminal (finished) TODO keywords.
     :arg tags_exclude_from_inheritance: Tags that don't propagate to
@@ -58,12 +62,30 @@ class Config:
     extra_tag_chars: str = ""
 
     def __post_init__(self) -> None:
-        """Normalize exclusion sets to lowercase for case-insensitive matching.
+        """Normalize fields on frozen dataclass.
+
+        - item_predicate: list/None compiled to callable via evaluator,
+          callable passed through, anything else raises ValueError.
+        - Exclusion sets lowercased for case-insensitive matching.
 
         Uses object.__setattr__ because the dataclass is frozen — the
         standard Python pattern for post-init normalization on frozen
         dataclasses.
         """
+        # -- Predicate normalization (S08) -----------------------------------
+        pred = self.item_predicate
+        if isinstance(pred, list) or pred is None:
+            from .evaluator import compile_predicate
+            object.__setattr__(
+                self, "item_predicate", compile_predicate(pred)
+            )
+        elif not callable(pred):
+            raise ValueError(
+                f"item_predicate must be callable, list, or None,"
+                f" got {type(pred).__name__}: {pred!r}"
+            )
+
+        # -- Exclusion normalization -----------------------------------------
         object.__setattr__(
             self,
             "exclude_drawers",

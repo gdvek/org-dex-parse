@@ -13,7 +13,7 @@ from org_dex_parse import Config
 
 
 class TestConfigPredicate:
-    """Config.item_predicate accepts a callable; default is lambda h: True."""
+    """Config.item_predicate accepts callable, list, or None."""
 
     def test_default_predicate(self):
         config = Config()
@@ -26,6 +26,29 @@ class TestConfigPredicate:
         pred = lambda h: hasattr(h, "properties")
         config = Config(item_predicate=pred)
         assert config.item_predicate is pred
+
+    def test_predicate_from_list(self):
+        """AC4: list is compiled to callable via evaluator."""
+        config = Config(item_predicate=["property", "Type"])
+        assert callable(config.item_predicate)
+
+        # Verify it actually works on a node-like object.
+        class FakeNode:
+            def get_property(self, name):
+                return "note" if name == "Type" else None
+
+        assert config.item_predicate(FakeNode()) is True
+
+    def test_predicate_from_none(self):
+        """AC4: None → default predicate (always True)."""
+        config = Config(item_predicate=None)
+        assert callable(config.item_predicate)
+        assert config.item_predicate("anything") is True
+
+    def test_predicate_invalid_raises(self):
+        """AC4: invalid type raises ValueError."""
+        with pytest.raises(ValueError):
+            Config(item_predicate=42)
 
     def test_frozen(self):
         config = Config()

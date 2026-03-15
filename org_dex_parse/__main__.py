@@ -7,10 +7,12 @@ Usage:
     python -m org_dex_parse ~/Remi/REMI/remi.org
     python -m org_dex_parse -v ~/Remi/ROAM/*.org
     python -m org_dex_parse --bare ~/org/plain.org   # no Remi config
+    python -m org_dex_parse --predicate '["property", "Type"]' file.org
 """
 from __future__ import annotations
 
 import argparse
+import json
 
 from .config import Config
 from .parser import parse_file
@@ -133,11 +135,23 @@ def main() -> None:
         "--bare", action="store_true",
         help="Use bare config (no keywords, no exclusions)",
     )
+    parser.add_argument(
+        "--predicate", type=str, default=None,
+        help='JSON s-expression predicate, e.g. \'["property", "Type"]\'',
+    )
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="Show raw_text preview")
 
     args = parser.parse_args()
-    config = Config() if args.bare else REMI_CONFIG
+
+    if args.predicate is not None:
+        # --predicate overrides --bare / Remi default.
+        pred_expr = json.loads(args.predicate)
+        config = Config(item_predicate=pred_expr)
+    elif args.bare:
+        config = Config()
+    else:
+        config = REMI_CONFIG
 
     for path in args.files:
         result = parse_file(path, config)

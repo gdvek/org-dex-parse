@@ -15,7 +15,7 @@ import orgparse.node as _orgparse_node
 from orgparse.node import OrgEnv
 
 from .config import Config
-from .types import Item, Link, ParseResult
+from .types import Item, Link, ParseResult, Timestamp
 
 # Save the original tag regex at import time so we can restore it
 # when extra_tag_chars is not needed.  Used by the HACK(S04) monkey-patch.
@@ -134,6 +134,40 @@ def _extract_links(text: str) -> tuple[Link, ...]:
     # Sort by position for document order (AC11).
     found.sort(key=lambda x: x[0])
     return tuple(link for _, link in found)
+
+
+# -- OrgDate conversion (S09b-1) ----------------------------------------------
+
+def _repeater_to_str(od: Any) -> str | None:
+    """Extract the repeater cookie from an OrgDate as a string.
+
+    Accesses the private _repeater attribute — a 3-tuple (prefix, value, unit)
+    where prefix is '+', '++', or '.+', value is an int, and unit is a
+    single char ('d', 'w', 'm', 'y').  Returns e.g. '+1w', '++2d', '.+1m'.
+
+    Returns None when no repeater is present.  Protected by guard test AC10.
+    """
+    rep = od._repeater
+    if rep is None:
+        return None
+    prefix, value, unit = rep
+    return f"{prefix}{value}{unit}"
+
+
+def _orgdate_to_timestamp(od: Any) -> Timestamp:
+    """Convert an orgparse OrgDate to our Timestamp type.
+
+    Maps OrgDate fields to Timestamp: date preserves the date/datetime
+    distinction from orgparse (date-only vs date+time), active reflects
+    angle vs square brackets, repeater is extracted via _repeater_to_str.
+
+    Used for planning fields (S09b-1) and generic timestamps (S09b-4).
+    """
+    return Timestamp(
+        date=od.start,
+        active=od.is_active(),
+        repeater=_repeater_to_str(od),
+    )
 
 
 def is_item(node: Any, predicate: Callable[[Any], bool]) -> bool:
@@ -296,6 +330,24 @@ def parse_file(path: str, config: Config) -> ParseResult:
             todo = node.todo if node.todo else None
             priority = node.priority
 
+            # -- Planning timestamps (S09b-1) ---------------------------------
+            # node.scheduled/deadline/closed return OrgDate objects that are
+            # falsy when absent (od.start is None), not Python None.
+            # All three wrapped in Timestamp for consistency (remi-org-parse
+            # had closed as bare datetime — we normalize).
+            scheduled = (
+                _orgdate_to_timestamp(node.scheduled)
+                if node.scheduled else None
+            )
+            deadline = (
+                _orgdate_to_timestamp(node.deadline)
+                if node.deadline else None
+            )
+            closed = (
+                _orgdate_to_timestamp(node.closed)
+                if node.closed else None
+            )
+
             # -- Raw text and links (S06, S09a) --------------------------------
             # Collect raw_text first, then extract links from it.
             # Links operate on raw_text (no zone exclusion) — fix F-LK1.
@@ -309,6 +361,9 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     parent_item_id=_find_parent_id(node, predicate),
                     linenumber=node.linenumber,
                     file_path=path_str,
+                    scheduled=scheduled,
+                    deadline=deadline,
+                    closed=closed,
                     raw_text=raw_text,
                     links=_extract_links(raw_text),
                     properties=props,

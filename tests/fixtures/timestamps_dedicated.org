@@ -31,3 +31,21 @@
   :PROPERTIES:
   :ID: ts-005
   :END:
+
+* Deadline with time
+  DEADLINE: <2026-05-01 Fri 09:00>
+  :PROPERTIES:
+  :ID: ts-006
+  :END:
+
+* Repeater catch-up
+  SCHEDULED: <2026-04-01 Wed ++2d>
+  :PROPERTIES:
+  :ID: ts-007
+  :END:
+
+* Repeater restart
+  SCHEDULED: <2026-04-01 Wed .+1m>
+  :PROPERTIES:
+  :ID: ts-008
+  :END:

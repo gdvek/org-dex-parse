@@ -8,6 +8,7 @@ ParseResult with structural fields and raw_text.
 from __future__ import annotations
 
 import re
+import textwrap
 from typing import Any, Callable
 
 import orgparse
@@ -499,6 +500,156 @@ def _extract_state_changes(text: str) -> tuple[StateChange, ...]:
     return tuple(entries)
 
 
+# -- Body extraction (S09d) ---------------------------------------------------
+
+# Drawer opener: :NAME: on its own line (whitespace-tolerant).
+# Reuses the same pattern as _RE_LOGBOOK_START but generalized: any drawer
+# name, not just LOGBOOK.  The stripped line must start and end with ':'
+# and have at least one character between them.
+#
+# Block opener: #+BEGIN_NAME [args...] on its own line.
+# Block closer is name-specific: #+END_NAME (not generic :END: like drawers).
+# Both patterns are handled inline in _filter_body_text — no compiled regex
+# needed because the checks are simple string operations.
+
+
+def _filter_body_text(
+    text: str,
+    exclude_drawers: frozenset[str],
+    exclude_blocks: frozenset[str],
+) -> str:
+    """Strip excluded drawers and blocks from body text.
+
+    Single-pass state machine over the lines of get_body('plain').
+    LOGBOOK is always excluded (hardcoded, merged into the drawer set).
+    Config drawers and blocks are excluded per configuration.
+
+    Drawer detection: :NAME: on its own line (after stripping whitespace),
+    closed by :END:.  Case-insensitive.
+    Block detection: #+BEGIN_NAME [args...], closed by #+END_NAME.
+    Case-insensitive.  Block name is the first token after #+BEGIN_.
+
+    Drawers and blocks cannot nest in org-mode, so one state variable
+    (outside / inside-drawer / inside-block) is sufficient.
+    """
+    # Merge LOGBOOK into the exclusion set — always excluded from body.
+    all_exclude_drawers = exclude_drawers | frozenset({"logbook"})
+
+    lines = text.splitlines(True)  # preserve line endings
+    result: list[str] = []
+    inside_drawer = False
+    inside_block_name: str | None = None
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Inside an excluded drawer — skip everything until :END:.
+        if inside_drawer:
+            if stripped.upper() == ":END:":
+                inside_drawer = False
+            continue
+
+        # Inside an excluded block — skip until the matching #+END_NAME.
+        if inside_block_name is not None:
+            if stripped.upper() == f"#+END_{inside_block_name}":
+                inside_block_name = None
+            continue
+
+        # Check for drawer opener: :NAME: on its own line.
+        # Minimum length 3 (:X:), starts and ends with ':'.
+        if (
+            stripped.startswith(":")
+            and stripped.endswith(":")
+            and len(stripped) > 2
+        ):
+            name = stripped[1:-1].lower()
+            if name in all_exclude_drawers:
+                inside_drawer = True
+                continue
+
+        # Check for block opener: #+BEGIN_NAME [args...].
+        stripped_upper = stripped.upper()
+        if stripped_upper.startswith("#+BEGIN_"):
+            after = stripped_upper[8:]
+            name = after.split()[0] if after else ""
+            if name.lower() in exclude_blocks:
+                inside_block_name = name
+                continue
+
+        result.append(line)
+
+    return "".join(result)
+
+
+def _collect_body(
+    node: Any,
+    predicate: Callable[[Any], bool],
+    exclude_drawers: frozenset[str],
+    exclude_blocks: frozenset[str],
+) -> str | None:
+    """Collect body text from an item's scope.
+
+    Walks the item subtree node-by-node (same pattern as _collect_raw_text
+    and _collect_timestamps): includes the item node itself, recurses into
+    non-item children (scaffolding), skips item children (separate items).
+
+    For each node, collects get_body('plain') — org-mode link syntax
+    resolved to descriptions, other markup preserved.  The result is
+    filtered through _filter_body_text to strip excluded drawers and blocks.
+
+    Scaffolding nodes contribute their heading (node.heading) in addition
+    to their body text — fix F-BD3.
+
+    Returns None when the result is empty after stripping.
+    """
+    parts: list[str] = []
+    _collect_body_walk(node, predicate, exclude_drawers, exclude_blocks,
+                       parts, is_item_node=True)
+
+    text = "\n".join(parts).strip()
+    return text if text else None
+
+
+def _collect_body_walk(
+    node: Any,
+    predicate: Callable[[Any], bool],
+    exclude_drawers: frozenset[str],
+    exclude_blocks: frozenset[str],
+    parts: list[str],
+    is_item_node: bool = False,
+) -> None:
+    """Recursive walk for body collection.
+
+    is_item_node distinguishes the item itself (no heading — already in
+    Item.title) from scaffolding nodes (heading included as body content).
+    """
+    # Scaffolding nodes: include heading as body content (fix F-BD3).
+    # node.heading is the clean title (orgparse strips TODO, priority, tags).
+    if not is_item_node:
+        parts.append(node.heading)
+
+    # Collect this node's body text (plain format: links resolved,
+    # other markup preserved).  Filter out excluded drawers/blocks.
+    # textwrap.dedent removes org-mode heading-level indentation for
+    # consistent output.
+    body = textwrap.dedent(
+        _filter_body_text(
+            node.get_body(format='plain'),
+            exclude_drawers,
+            exclude_blocks,
+        )
+    ).strip()
+    if body:
+        parts.append(body)
+
+    # Recurse into non-item children (scaffolding).
+    for child in node.children:
+        if is_item(child, predicate):
+            continue
+        _collect_body_walk(child, predicate, exclude_drawers, exclude_blocks,
+                           parts)
+
+
 def is_item(node: Any, predicate: Callable[[Any], bool]) -> bool:
     """Unified item boundary check.
 
@@ -720,6 +871,15 @@ def parse_file(path: str, config: Config) -> ParseResult:
             # not of its children (unlike clock which aggregates time).
             state_changes = _extract_state_changes(str(node))
 
+            # -- Body text (S09d) ------------------------------------------
+            # Collect body from item scope (walk scaffolding).  Plain
+            # format: link syntax resolved, other markup preserved.
+            # Excluded: LOGBOOK (hardcoded), config drawers/blocks.
+            body = _collect_body(
+                node, predicate,
+                config.exclude_drawers, config.exclude_blocks,
+            )
+
             items.append(
                 Item(
                     title=node.heading,
@@ -738,6 +898,7 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     range_ts=range_ts,
                     clock=clock,
                     state_changes=state_changes,
+                    body=body,
                     raw_text=raw_text,
                     links=_extract_links(raw_text),
                     properties=props,

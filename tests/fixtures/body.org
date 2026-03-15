@@ -1,0 +1,98 @@
+* Item plain markup
+  :PROPERTIES:
+  :ID: body-ac1
+  :END:
+  Testo con *bold* e /italic/ e [[https://example.com][un link]].
+
+* Item LOGBOOK excluded
+  :PROPERTIES:
+  :ID: body-ac2
+  :END:
+  :LOGBOOK:
+  - State "DONE" from "TODO" [2026-03-10 Tue 10:30]
+  CLOCK: [2026-03-10 Tue 09:00]--[2026-03-10 Tue 10:30] =>  1:30
+  :END:
+  Testo dopo logbook.
+
+* Item configurable drawer
+  :PROPERTIES:
+  :ID: body-ac3
+  :END:
+  :NOTES:
+  Appunti privati.
+  :END:
+  Testo dopo drawer.
+
+* Item configurable block
+  :PROPERTIES:
+  :ID: body-ac4
+  :END:
+  #+BEGIN_COMMENT
+  Commento interno.
+  #+END_COMMENT
+  Testo dopo block.
+
+* Item preserved drawer and block
+  :PROPERTIES:
+  :ID: body-ac5
+  :END:
+  :CUSTOM:
+  Contenuto custom drawer.
+  :END:
+  #+BEGIN_EXAMPLE
+  Esempio preservato.
+  #+END_EXAMPLE
+  Testo finale.
+
+* Item scaffold heading
+  :PROPERTIES:
+  :ID: body-ac6
+  :END:
+  Testo item.
+** Scaffold child
+   Testo scaffolding.
+
+* Item sub-item boundary
+  :PROPERTIES:
+  :ID: body-ac8
+  :END:
+  Testo genitore.
+** Sub-item
+   :PROPERTIES:
+   :ID: sub-item-ac8
+   :END:
+   Testo sub-item.
+
+* Item empty body
+  :PROPERTIES:
+  :ID: body-ac9a
+  :END:
+
+* Item body empty after filter
+  :PROPERTIES:
+  :ID: body-ac9b
+  :END:
+  :LOGBOOK:
+  - State "TODO" from              [2026-03-10 Tue 10:00]
+  :END:
+
+* Item case insensitive
+  :PROPERTIES:
+  :ID: body-ac10
+  :END:
+  :Logbook:
+  - State "TODO" from              [2026-03-10 Tue 10:00]
+  :END:
+  :notes:
+  Appunti.
+  :END:
+  Testo dopo.
+
+* Item block with args
+  :PROPERTIES:
+  :ID: body-ac11
+  :END:
+  #+begin_src python :tangle yes
+  print("hello")
+  #+end_src
+  Testo dopo block.

@@ -1,0 +1,69 @@
+#+TITLE: Clock Entries
+#+TODO: TODO | DONE
+
+* Item with closed clocks
+  :PROPERTIES:
+  :ID: clk-001
+  :END:
+  :LOGBOOK:
+  CLOCK: [2026-03-10 Tue 14:00]--[2026-03-10 Tue 15:30] =>  1:30
+  CLOCK: [2026-03-09 Mon 09:00]--[2026-03-09 Mon 10:15] =>  1:15
+  :END:
+  Body text.
+
+* Item with open clock
+  :PROPERTIES:
+  :ID: clk-002
+  :END:
+  :LOGBOOK:
+  CLOCK: [2026-03-08 Sun 20:00]
+  :END:
+
+* Item with mixed clocks
+  :PROPERTIES:
+  :ID: clk-003
+  :END:
+  :LOGBOOK:
+  CLOCK: [2026-03-12 Thu 11:00]--[2026-03-12 Thu 12:00] =>  1:00
+  CLOCK: [2026-03-11 Wed 16:00]
+  CLOCK: [2026-03-10 Tue 08:30]--[2026-03-10 Tue 09:45] =>  1:15
+  :END:
+
+* Item with no clock
+  :PROPERTIES:
+  :ID: clk-004
+  :END:
+  Just a body, no LOGBOOK.
+
+* Item with scaffolding clock
+  :PROPERTIES:
+  :ID: clk-005
+  :END:
+  Parent body.
+** Scaffold child
+   :LOGBOOK:
+   CLOCK: [2026-03-15 Sun 10:00]--[2026-03-15 Sun 11:00] =>  1:00
+   :END:
+   Scaffold body.
+
+* Item with sub-item clock
+  :PROPERTIES:
+  :ID: clk-006
+  :END:
+  Parent body.
+** Sub-item
+   :PROPERTIES:
+   :ID: clk-006-sub
+   :END:
+   :LOGBOOK:
+   CLOCK: [2026-03-14 Sat 09:00]--[2026-03-14 Sat 10:00] =>  1:00
+   :END:
+
+* TODO Item with clock and body ts
+  :PROPERTIES:
+  :ID: clk-007
+  :END:
+  :LOGBOOK:
+  CLOCK: [2026-03-10 Tue 09:00]--[2026-03-10 Tue 10:30] =>  1:30
+  :END:
+  Real ts in body: [2026-05-01 Fri].

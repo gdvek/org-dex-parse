@@ -17,7 +17,7 @@ from orgparse.node import OrgEnv
 from .config import Config
 from orgparse.date import OrgDate
 
-from .types import Item, Link, ParseResult, Range, Timestamp
+from .types import ClockEntry, Item, Link, ParseResult, Range, Timestamp
 
 # Save the original tag regex at import time so we can restore it
 # when extra_tag_chars is not needed.  Used by the HACK(S04) monkey-patch.
@@ -380,6 +380,57 @@ def _parse_timestamp_property(value: str) -> Timestamp | None:
     return Timestamp(date=date, active=active, repeater=None)
 
 
+# -- Clock extraction (S09c-1) ------------------------------------------------
+
+def _collect_clock(
+    node: Any, predicate: Callable[[Any], bool]
+) -> tuple[ClockEntry, ...]:
+    """Collect CLOCK entries from an item's scope.
+
+    Walks the item subtree node-by-node (same pattern as _collect_raw_text
+    and _collect_timestamps): includes the item node itself, recurses into
+    non-item children (scaffolding), skips item children (separate items).
+
+    Uses orgparse's node.clock API (list[OrgDateClock]) — no regex needed.
+    Each OrgDateClock is converted to our ClockEntry type.
+
+    Returns entries in chronological order.  The LOGBOOK drawer grows upward
+    (newest entry at top), so node.clock is in reverse-chronological order.
+    We collect all entries, then reverse the full list once at the end.
+    """
+    entries: list[ClockEntry] = []
+    _collect_clock_walk(node, predicate, entries)
+    # Reverse for chronological order: oldest first.
+    entries.reverse()
+    return tuple(entries)
+
+
+def _collect_clock_walk(
+    node: Any,
+    predicate: Callable[[Any], bool],
+    entries: list[ClockEntry],
+) -> None:
+    """Recursive walk for clock collection.
+
+    Converts each OrgDateClock to ClockEntry using _duration (private API,
+    guarded by test AC7).  _duration is int (minutes) on closed clocks,
+    None on open clocks.  The public .duration property computes a timedelta
+    from end-start and raises TypeError on open clocks — so we use _duration.
+    """
+    for cl in node.clock:
+        entries.append(ClockEntry(
+            start=cl.start,
+            end=cl.end,
+            duration_minutes=cl._duration,
+        ))
+
+    # Recurse into non-item children (scaffolding).
+    for child in node.children:
+        if is_item(child, predicate):
+            continue
+        _collect_clock_walk(child, predicate, entries)
+
+
 def is_item(node: Any, predicate: Callable[[Any], bool]) -> bool:
     """Unified item boundary check.
 
@@ -590,6 +641,11 @@ def parse_file(path: str, config: Config) -> ParseResult:
                 node, predicate
             )
 
+            # -- Clock entries (S09c-1) ------------------------------------
+            # Walk scaffolding to collect CLOCK entries from item scope.
+            # Uses orgparse's structured node.clock API — no regex.
+            clock = _collect_clock(node, predicate)
+
             items.append(
                 Item(
                     title=node.heading,
@@ -606,6 +662,7 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     active_ts=active_ts,
                     inactive_ts=inactive_ts,
                     range_ts=range_ts,
+                    clock=clock,
                     raw_text=raw_text,
                     links=_extract_links(raw_text),
                     properties=props,

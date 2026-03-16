@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "org-dex-parse"
-version = "0.1.0"
+version = "0.1.1"
 description = "Parse org-mode files into structured data for the org-dex indexing system"
 readme = {file = "README.org", content-type = "text/plain"}
 license = "GPL-3.0-or-later"

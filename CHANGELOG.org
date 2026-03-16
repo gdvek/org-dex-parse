@@ -5,9 +5,7 @@ All notable changes to org-dex-parse are documented in this file.
 Format follows [[https://keepachangelog.com/en/1.1.0/][Keep a Changelog]].
 Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
 
-* [0.1.0] — 2026-03-16
-
-Initial release.
+* [0.1.1] — 2026-03-16
 
 ** Fixed
 - Bare URL trailing dot: =https://example.com/page.= in prose now strips
@@ -16,6 +14,17 @@ Initial release.
   (previously produced =" NEXT"= and =""=)
 - CLI: JSON config with scalar where list expected (e.g. ="todos": "LOGBOOK"=)
   now fails with a clear error instead of silently iterating the string
+
+** Changed
+- CLI rewritten as generic public tool (=python -m org_dex_parse=)
+- Adapter layer isolates orgparse private API access
+- Pre-computed item map for O(1) is_item lookup during tree walks
+- Link deduplication uses bisect instead of linear scan
+- Removed unused =parent_map= parameter from =_build_inherited_tags_map=
+
+* [0.1.0] — 2026-03-16
+
+Initial release.
 
 ** Added
 - Parse org-mode files into structured =Item= dataclasses (24 fields)

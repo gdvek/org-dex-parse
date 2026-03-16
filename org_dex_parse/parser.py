@@ -684,7 +684,7 @@ def _build_parent_map(root: Any) -> dict[int, Any]:
 
 
 def _build_inherited_tags_map(
-    root: Any, parent_map: dict[int, Any]
+    root: Any,
 ) -> dict[int, frozenset[str]]:
     """Pre-compute inherited tags for every node in a single O(n) walk.
 
@@ -826,7 +826,7 @@ def parse_file(path: str, config: Config) -> ParseResult:
     # causing O(n²) total when called per item.  These caches make
     # parent lookup and tag inheritance O(1) per node.
     parent_map = _build_parent_map(root)
-    inherited_tags_map = _build_inherited_tags_map(root, parent_map)
+    inherited_tags_map = _build_inherited_tags_map(root)
 
     # S29: pre-compute the item/scaffolding decision for every node.
     # The predicate is called exactly once per node (those with :ID:).

@@ -39,33 +39,17 @@ policies and a configurable predicate.
     (JSON-serializable, cross-process) decides which =:ID:= headings
     are items and which are scaffolding.  No code changes required.
   - *Zone-aware extraction* — different exclusion policies for body,
-    links, and timestamps.  The =:LOGBOOK:= drawer is excluded from
-    body text but its clock entries and state changes are extracted by
-    dedicated handlers.  Custom drawers can be excluded from body while
-    their links are still captured.
+    links, and timestamps. Custom drawers can be excluded from body
+    while their links are still captured.
   - *Scaffolding roll-up* — headings without =:ID:= (or that fail the
     predicate) are not discarded.  Their content — body, links,
     timestamps, clock — rolls up into the nearest ancestor item.
-  - *24 structured fields per item* — planning timestamps, generic
-    timestamps (with deduplication), tag inheritance, parent tracking,
-    clock entries, state changes, links (org-mode and bare URLs),
-    filtered body, raw source text, and properties.
-  - *Immutable data* — all public types (=Item=, =Timestamp=, =Link=,
-    =ClockEntry=, =StateChange=, =Range=) are frozen dataclasses.
 
 * Design choices
   - *orgparse does syntax, org-dex-parse does domain logic.*  The
     parser does not re-implement the org-mode grammar — it delegates
     low-level parsing to orgparse and focuses on item discrimination,
     field extraction, and zone-aware filtering.
-  - *O(n) traversal.*  Parent lookup and tag inheritance are
-    pre-computed in a single tree walk, not recalculated per item.
-  - *Defensive dependency management.*  orgparse is pinned to
-    =>=0.4,<0.5=.  Four private API access points are guarded by
-    version-specific tests.
-  - *Tested on real data.*  273 tests passing.  Regression-tested
-    against 609 real-world items, fixing 16 classes of bugs found in
-    the predecessor parser.
 
 * Performance
   Extraction profile on a real-world org archive (4,380 items, Linux, Python 3.11):
@@ -662,7 +646,7 @@ policies and a configurable predicate.
    (=Item.clock=, =Item.state_changes=).
 
 * Item fields
-
+  
   Each =Item= is a frozen (immutable) dataclass with 24 fields:
 
   | Field          | Type                          | Description                                      |
@@ -721,7 +705,6 @@ policies and a configurable predicate.
    #+end_src
 
 * CLI
-
   A CLI is included for exploration and scripting:
 
   #+begin_src sh
@@ -824,7 +807,6 @@ policies and a configurable predicate.
    orgparse changes its internals within the pinned range.
 
 * Development
-
   #+begin_src sh
   git clone https://github.com/gdvek/org-dex-parse.git
   cd org-dex-parse

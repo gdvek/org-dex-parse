@@ -7,6 +7,7 @@ ParseResult with structural fields and raw_text.
 """
 from __future__ import annotations
 
+import datetime
 import re
 import textwrap
 from typing import Any, Callable
@@ -49,7 +50,7 @@ _RE_BARE_URL = re.compile(r'https?://[^\s\[\]<>]+')
 
 # Characters stripped from the end of bare URLs (trailing punctuation
 # that is syntactically part of the surrounding sentence, not the URL).
-_BARE_URL_TRAILING = set(",;:)")
+_BARE_URL_TRAILING = frozenset(",;:)")
 
 
 def _extract_links(text: str) -> tuple[Link, ...]:
@@ -303,6 +304,9 @@ _RE_TIMESTAMP_PROPERTY = re.compile(
     r'(?:\s+\w+)?'                           # optional day-of-week (ignored)
     r'(?:\s+(?P<hour>\d{2}):(?P<minute>\d{2}))?'  # optional HH:MM
     r'\s*(?:[>\]])?'                         # optional closing delimiter
+    # Note: we don't enforce that the closing delimiter matches the opening
+    # one (<> vs []).  Well-formed org files never have mismatched pairs,
+    # so the added complexity isn't warranted.
     r'\s*$'
 )
 
@@ -328,12 +332,10 @@ def _parse_timestamp_property(value: str) -> Timestamp | None:
 
     # Time component determines date vs datetime (AC5/AC6).
     if m.group("hour") is not None:
-        import datetime
         date = datetime.datetime(year, month, day,
                                  int(m.group("hour")),
                                  int(m.group("minute")))
     else:
-        import datetime
         date = datetime.date(year, month, day)
 
     # Active only when explicitly delimited with <> (AC7).
@@ -427,7 +429,6 @@ def _extract_state_changes(text: str) -> tuple[StateChange, ...]:
     (newest first), so matches are in reverse-chronological order.
     We collect all, then reverse once at the end.
     """
-    import datetime
 
     entries: list[StateChange] = []
     for m in _RE_STATE_CHANGE.finditer(text):

@@ -186,7 +186,7 @@ def _strip_link_descriptions(text: str) -> str:
 
 
 def _collect_timestamps(
-    node: Any, predicate: Callable[[Any], bool]
+    node: Any, item_map: dict[int, bool]
 ) -> tuple[tuple[Timestamp, ...], tuple[Timestamp, ...], tuple[Range, ...]]:
     """Collect generic timestamps from an item's scope.
 
@@ -209,7 +209,7 @@ def _collect_timestamps(
     inactive: list[Timestamp] = []
     ranges: list[Range] = []
 
-    _collect_timestamps_walk(node, predicate, active, inactive, ranges,
+    _collect_timestamps_walk(node, item_map, active, inactive, ranges,
                              is_item_node=True)
 
     return tuple(active), tuple(inactive), tuple(ranges)
@@ -235,7 +235,7 @@ def _classify_orgdate(
 
 def _collect_timestamps_walk(
     node: Any,
-    predicate: Callable[[Any], bool],
+    item_map: dict[int, bool],
     active: list[Timestamp],
     inactive: list[Timestamp],
     ranges: list[Range],
@@ -283,9 +283,9 @@ def _collect_timestamps_walk(
 
     # Recurse into non-item children (scaffolding).
     for child in node.children:
-        if is_item(child, predicate):
+        if item_map.get(id(child), False):
             continue
-        _collect_timestamps_walk(child, predicate, active, inactive, ranges)
+        _collect_timestamps_walk(child, item_map, active, inactive, ranges)
 
 
 # -- Timestamp property parsing (S09b-2) ---------------------------------------
@@ -346,7 +346,7 @@ def _parse_timestamp_property(value: str) -> Timestamp | None:
 # -- Clock extraction (S09c-1) ------------------------------------------------
 
 def _collect_clock(
-    node: Any, predicate: Callable[[Any], bool]
+    node: Any, item_map: dict[int, bool]
 ) -> tuple[ClockEntry, ...]:
     """Collect CLOCK entries from an item's scope.
 
@@ -362,7 +362,7 @@ def _collect_clock(
     We collect all entries, then reverse the full list once at the end.
     """
     entries: list[ClockEntry] = []
-    _collect_clock_walk(node, predicate, entries)
+    _collect_clock_walk(node, item_map, entries)
     # Reverse for chronological order: oldest first.
     entries.reverse()
     return tuple(entries)
@@ -370,7 +370,7 @@ def _collect_clock(
 
 def _collect_clock_walk(
     node: Any,
-    predicate: Callable[[Any], bool],
+    item_map: dict[int, bool],
     entries: list[ClockEntry],
 ) -> None:
     """Recursive walk for clock collection.
@@ -390,9 +390,9 @@ def _collect_clock_walk(
 
     # Recurse into non-item children (scaffolding).
     for child in node.children:
-        if is_item(child, predicate):
+        if item_map.get(id(child), False):
             continue
-        _collect_clock_walk(child, predicate, entries)
+        _collect_clock_walk(child, item_map, entries)
 
 
 # -- State change extraction (S09c-2) ----------------------------------------
@@ -543,7 +543,7 @@ def _filter_body_text(
 
 def _collect_body(
     node: Any,
-    predicate: Callable[[Any], bool],
+    item_map: dict[int, bool],
     exclude_drawers: frozenset[str],
     exclude_blocks: frozenset[str],
 ) -> str | None:
@@ -563,7 +563,7 @@ def _collect_body(
     Returns None when the result is empty after stripping.
     """
     parts: list[str] = []
-    _collect_body_walk(node, predicate, exclude_drawers, exclude_blocks,
+    _collect_body_walk(node, item_map, exclude_drawers, exclude_blocks,
                        parts, is_item_node=True)
 
     text = "\n".join(parts).strip()
@@ -572,7 +572,7 @@ def _collect_body(
 
 def _collect_body_walk(
     node: Any,
-    predicate: Callable[[Any], bool],
+    item_map: dict[int, bool],
     exclude_drawers: frozenset[str],
     exclude_blocks: frozenset[str],
     parts: list[str],
@@ -604,9 +604,9 @@ def _collect_body_walk(
 
     # Recurse into non-item children (scaffolding).
     for child in node.children:
-        if is_item(child, predicate):
+        if item_map.get(id(child), False):
             continue
-        _collect_body_walk(child, predicate, exclude_drawers, exclude_blocks,
+        _collect_body_walk(child, item_map, exclude_drawers, exclude_blocks,
                            parts)
 
 
@@ -627,7 +627,7 @@ def is_item(node: Any, predicate: Callable[[Any], bool]) -> bool:
 
 def _find_parent_id(
     node: Any,
-    predicate: Callable[[Any], bool],
+    item_map: dict[int, bool],
     parent_map: dict[int, Any],
 ) -> str | None:
     """Walk up the tree to find the nearest item ancestor.
@@ -638,6 +638,8 @@ def _find_parent_id(
 
     Uses parent_map (S11) for O(1) parent lookup instead of orgparse's
     node.parent which does an O(n) linear scan via _find_parent.
+    Uses item_map (S29) for O(1) is_item lookup instead of re-evaluating
+    the predicate.
 
     Stop condition: ancestor not in parent_map (reached root) or level 0.
     """
@@ -646,7 +648,7 @@ def _find_parent_id(
         ancestor = parent_map[cur_id]
         if ancestor.level == 0:
             return None
-        if is_item(ancestor, predicate):
+        if item_map.get(id(ancestor), False):
             return ancestor.get_property("ID")
         cur_id = id(ancestor)
     return None
@@ -718,8 +720,36 @@ def _build_inherited_tags_map(
 
 
 
+def _build_item_map(
+    root: Any, predicate: Callable[[Any], bool]
+) -> dict[int, bool]:
+    """Pre-compute the item/scaffolding decision for every node.
+
+    Returns {id(node): bool} — True if the node is an item, False
+    otherwise.  Built once in parse_file, used by all walks for O(1)
+    lookup instead of re-evaluating is_item on every traversal.
+
+    The predicate is called exactly once per node that has :ID:
+    (is_item short-circuits on missing :ID: before calling predicate).
+    This makes the purity contract explicit: the predicate MUST be a
+    pure function (no side effects, deterministic).  A predicate with
+    side effects would produce different results if called multiple
+    times — this cache freezes the decision, making that class of bugs
+    impossible.
+
+    Same pattern as parent_map (S11) and inherited_tags_map (S11):
+    single O(n) pre-computation, O(1) per-node access.
+    """
+    item_map: dict[int, bool] = {}
+    # root[1:] iterates all nodes in document order, skipping the
+    # virtual root — same iterator used by parse_file's main loop.
+    for node in root[1:]:
+        item_map[id(node)] = is_item(node, predicate)
+    return item_map
+
+
 def _collect_raw_text(
-    node: Any, predicate: Callable[[Any], bool]
+    node: Any, item_map: dict[int, bool]
 ) -> str:
     """Collect the complete unfiltered source text for an item node.
 
@@ -738,9 +768,9 @@ def _collect_raw_text(
     parts: list[str] = [str(node)]
 
     for child in node.children:
-        if is_item(child, predicate):
+        if item_map.get(id(child), False):
             continue
-        parts.append(_collect_raw_text(child, predicate))
+        parts.append(_collect_raw_text(child, item_map))
 
     return "\n".join(parts)
 
@@ -791,13 +821,18 @@ def parse_file(path: str, config: Config) -> ParseResult:
     parent_map = _build_parent_map(root)
     inherited_tags_map = _build_inherited_tags_map(root, parent_map)
 
+    # S29: pre-compute the item/scaffolding decision for every node.
+    # The predicate is called exactly once per node (those with :ID:).
+    # All walks use item_map for O(1) lookup instead of re-evaluating.
+    item_map = _build_item_map(root, predicate)
+
     items: list[Item] = []
 
     # root[1:] iterates ALL nodes in document order, skipping the
     # virtual root.  No recursion needed — orgparse provides a flat
     # iterator over the entire tree.
     for node in root[1:]:
-        if is_item(node, predicate):
+        if item_map.get(id(node), False):
             # -- Properties (AC1–AC6) ----------------------------------------
             # node.properties is the direct PROPERTIES drawer only (no
             # subtree) — this prevents F-PR1 (subtree leakage) by design.
@@ -867,20 +902,20 @@ def parse_file(path: str, config: Config) -> ParseResult:
             # -- Raw text and links (S06, S09a) --------------------------------
             # Collect raw_text first, then extract links from it.
             # Links operate on raw_text (no zone exclusion) — fix F-LK1.
-            raw_text = _collect_raw_text(node, predicate)
+            raw_text = _collect_raw_text(node, item_map)
 
             # -- Generic timestamps (S09b-4) --------------------------------
             # Walk the item subtree node-by-node, extracting from heading
             # and filtered body lines.  Excludes planning, PROPERTIES,
             # CLOCK, and state-change lines.
             active_ts, inactive_ts, range_ts = _collect_timestamps(
-                node, predicate
+                node, item_map
             )
 
             # -- Clock entries (S09c-1) ------------------------------------
             # Walk scaffolding to collect CLOCK entries from item scope.
             # Uses orgparse's structured node.clock API — no regex.
-            clock = _collect_clock(node, predicate)
+            clock = _collect_clock(node, item_map)
 
             # -- State changes (S09c-2) ------------------------------------
             # Extract from str(node) only — no walk scaffolding.
@@ -893,7 +928,7 @@ def parse_file(path: str, config: Config) -> ParseResult:
             # format: link syntax resolved, other markup preserved.
             # Excluded: LOGBOOK (hardcoded), config drawers/blocks.
             body = _collect_body(
-                node, predicate,
+                node, item_map,
                 config.exclude_drawers, config.exclude_blocks,
             )
 
@@ -902,7 +937,7 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     title=node.heading,
                     item_id=node.get_property("ID"),
                     level=node.level,
-                    parent_item_id=_find_parent_id(node, predicate,
+                    parent_item_id=_find_parent_id(node, item_map,
                                                      parent_map),
                     linenumber=node.linenumber,
                     file_path=path_str,

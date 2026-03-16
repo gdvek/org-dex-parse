@@ -89,6 +89,31 @@ class TestBareUrlPunctuation:
                        if lk.target == "https://example.com/paren"]
         assert len(paren_links) == 1
 
+    def test_trailing_dot_stripped(self):
+        """S26-AC1: trailing '.' stripped from bare URL."""
+        items = _parse()
+        links = items["lnk-001"].links
+        dot_links = [lk for lk in links
+                     if lk.target == "https://example.com/dotpage"]
+        assert len(dot_links) >= 1
+
+    def test_trailing_dots_multiple_stripped(self):
+        """S26-AC2: multiple trailing '.' all stripped from bare URL."""
+        items = _parse()
+        links = items["lnk-001"].links
+        # Both "dotpage." and "dotpage..." should resolve to "dotpage"
+        dot_links = [lk for lk in links
+                     if lk.target == "https://example.com/dotpage"]
+        assert len(dot_links) == 2
+
+    def test_internal_dot_preserved(self):
+        """S26-AC3: internal dot (.html) NOT stripped from bare URL."""
+        items = _parse()
+        links = items["lnk-001"].links
+        html_links = [lk for lk in links
+                      if lk.target == "https://example.com/path.html"]
+        assert len(html_links) == 1
+
 
 # -- AC5: deduplication (bare URL inside org link) ----------------------------
 
@@ -236,11 +261,14 @@ class TestLinkOrder:
         # Expected order from the fixture:
         # https (example.com), id (abc-123), fuzzy,
         # https (bare), https (page), https (paren),
+        # https (dotpage x2), https (path.html),
         # mailto, info, file, elisp, doi, shell
         assert targets_in_order == [
             "https://example.com", "id:abc-123", "Heading: with colon",
             "https://bare.example.com/path",
             "https://example.com/page", "https://example.com/paren",
+            "https://example.com/dotpage", "https://example.com/dotpage",
+            "https://example.com/path.html",
             "mailto:user@example.com", "info:emacs#Top",
             "file:/tmp/test.org", 'elisp:(message "hi")',
             "doi:10.1000/test", "shell:ls -la",
@@ -268,9 +296,9 @@ class TestNoLinks:
 class TestLinkCount:
 
     def test_lnk001_link_count(self):
-        """lnk-001 has exactly 12 links (all types in fixture)."""
+        """lnk-001 has exactly 15 links (all types in fixture)."""
         items = _parse()
-        assert len(items["lnk-001"].links) == 12
+        assert len(items["lnk-001"].links) == 15
 
     def test_lnk003_link_count(self):
         """lnk-003 has 2 links: org + separate bare (no overlap)."""

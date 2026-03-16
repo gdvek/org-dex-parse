@@ -9,6 +9,9 @@
   Bare URL: https://bare.example.com/path
   Bare URL con punteggiatura: https://example.com/page,
   URL in parentesi: (https://example.com/paren)
+  Bare URL con punto: https://example.com/dotpage.
+  Bare URL con punti multipli: https://example.com/dotpage...
+  Bare URL con estensione: https://example.com/path.html
   Link mailto: [[mailto:user@example.com][mail]]
   Link info: [[info:emacs#Top][Emacs manual]]
   Link file: [[file:/tmp/test.org][local file]]

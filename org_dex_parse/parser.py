@@ -49,7 +49,7 @@ _RE_BARE_URL = re.compile(r'https?://[^\s\[\]<>]+')
 
 # Characters stripped from the end of bare URLs (trailing punctuation
 # that is syntactically part of the surrounding sentence, not the URL).
-_BARE_URL_TRAILING = frozenset(",;:)")
+_BARE_URL_TRAILING = frozenset(",;:.)")
 
 
 def _extract_links(text: str) -> tuple[Link, ...]:

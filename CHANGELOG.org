@@ -10,6 +10,8 @@ Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
 Initial release.
 
 ** Fixed
+- Bare URL trailing dot: =https://example.com/page.= in prose now strips
+  the final period (previously included it in the link target)
 - CLI: =--todos "TODO, NEXT,"= now strips whitespace and drops empty tokens
   (previously produced =" NEXT"= and =""=)
 - CLI: JSON config with scalar where list expected (e.g. ="todos": "LOGBOOK"=)

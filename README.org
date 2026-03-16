@@ -1,213 +1,715 @@
 #+title: org-dex-parse
 #+author: Gabriele Della Vecchia
-#+startup: overview
 
-Org-mode parsing library for [[https://github.com/gdvek/org-dex][org-dex]].  Transforms org files into structured
-items using [[https://github.com/karlicoss/orgparse][orgparse]] as the parsing backend.
+Parse org-mode files into structured data.  Built for [[https://github.com/gdvek/org-dex][org-dex]], usable
+standalone.  Uses [[https://github.com/karlicoss/orgparse][orgparse]] as the parsing backend.
 
-Successor of [[https://github.com/gdvek/remi-org-parse][remi-org-parse]] — same mission, two key evolutions:
-configurable item definition (not hardcoded) and fixes for all parser bugs
-discovered during [[https://github.com/gdvek/remi-org-db][remi-org-db v3]] regression testing.
+* Installation
 
-* What it does
-  Given an org file and a configuration, produces a flat tuple of parsed items.
-  Each item is a heading that matches a user-defined predicate — not a hardcoded
-  rule.
-
-  #+begin_example
-  org file ──→ org-dex-parse ──→ ParseResult
-                    │                 └── .items: tuple[Item, ...]
-                    │
-               Config
-                 .item_predicate   ← what counts as an item
-                 .todos / .dones
-                 .extra_tag_chars  ← custom tag characters
-                 .exclude_drawers
-                 .exclude_blocks
-                 ...
-  #+end_example
-
-* How it differs from remi-org-parse
-
-  | Aspect              | remi-org-parse                  | org-dex-parse              |
-  |---------------------+---------------------------------+----------------------------|
-  | Item definition     | Hardcoded: =:ID:= + =:Type:=        | Configurable predicate     |
-  | Consumer            | remi-org-db (Python)            | org-dex (Elisp)            | /[Org dex is in python]/
-  | Drawer exclusion    | One policy (body + links)       | Separate policies          |
-  | Timestamp scoping   | Broad (drawer/planning leakage) | Zone-aware extraction      |
-  | Link extraction     | Loses links in excluded drawers | Separate body/link policy  |
-  | Link classification | 6 hardcoded categories          | None — consumer classifies |
-  | Tag characters      | Hardcoded monkey-patch          | Configurable extra chars   |
-  | Body markup         | Stripped to plain text          | Raw text preserved         |
-  | Property scoping    | Subtree traversal               | Direct drawer only         |
-  | Performance         | Multi-pass tree walk            | Optimized (fewer passes)   |
-
-  Full list of v2 bugs addressed: [[file:project/v2-parser-findings.org][v2-parser-findings.org]].
-
-* Architecture
-  =orgparse= is a dependency, not a fork.  It handles low-level org-mode syntax
-  (headlines, properties, planning, timestamps).  This package adds the domain
-  layer: item discrimination via predicate, zone-aware extraction, body
-  collection with proper scoping.
-
-** Modules
-   
-   | Module    | Responsibility                                       |
-   |-----------+------------------------------------------------------|
-   | =parser.py= | Orchestration: load file → walk tree → extract items |
-   | =body.py=   | Body text collection, affiliated keyword exclusion   |
-   | =links.py=  | Link extraction (zone-aware), no classification      |
-   | =config.py= | =Config=: predicate, keywords, exclusion lists         |
-   | =types.py=  | =Item=, =Timestamp=, =Link=, =ParseResult=                   |
-
-** Item predicate
-   The predicate is a function =headline → bool= that determines which
-   headings are items.  =:ID:= is a structural invariant — the predicate is
-   only called on headings that already have =:ID:=.
-
-   #+begin_example
-   Predicate examples:
-
-   canonical:  lambda h: True              (any heading with :ID:)
-   remi:       lambda h: has_property(h, "Type")  (:ID: + :Type:)
-   roam-like:  lambda h: not has_property(h, "ROAM_EXCLUDE")
-   #+end_example
-
-   The predicate partitions the entire org tree.  Every heading belongs to
-   exactly one item: either it /is/ an item, or it belongs to its nearest
-   item ancestor.  This partitioning determines:
-   - parent-item-id (transparent scaffolding traversal)
-   - body collection boundaries
-   - timestamp/link extraction scope
-
-** Zone-aware extraction
-   Extraction of timestamps, links, and body text respects exclusion zones.
-   A zone is a structural region (drawer, block, planning line) where certain
-   data types should not be extracted from.
-
-   #+begin_example
-   ┌─ heading ──────────────────────────────────┐
-   │  ┌─ PROPERTIES ──────┐  always excluded    │
-   │  │  :ID: ...         │  from ts/link/body  │
-   │  └───────────────────┘                     │
-   │  ┌─ LOGBOOK ─────────┐  excluded from body │
-   │  │  clock, states    │  extracted by       │
-   │  │                   │  dedicated handlers │
-   │  └───────────────────┘                     │
-   │  ┌─ ___LINKED_BY___ ┐  excluded from body  │
-   │  │  [[id:...][...]]  │  links EXTRACTED    │
-   │  └───────────────────┘                     │
-   │  body text here ...     ← body, ts, links  │
-   └────────────────────────────────────────────┘
-   #+end_example
-
-   Key principle: "exclude from body" ≠ "exclude from links".  Exclusion
-   policies are per data-type, not global.
-
-** Extract, don't classify
-   The parser extracts structured data but does not classify it into
-   domain-specific categories.  Classification is the consumer's job.
-
-   #+begin_example
-   ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-   │   org file        │     │  org-dex-parse   │     │  consumer        │
-   │                   │ ──→ │  (extract)       │ ──→ │  (classify)      │
-   │  :tag1: :tag2:   │     │                   │     │                   │
-   │  [[id:...][...]] │     │  .local_tags      │     │  tag_category()  │
-   │  [[https://...]] │     │  .links           │     │  link_category() │
-   └──────────────────┘     └──────────────────┘     └──────────────────┘
-   #+end_example
-
-   *Tags:* extracted as raw strings in =.local_tags= and =.inherited_tags=.
-   The consumer applies its own classification (by prefix, by mapping, or
-   whatever logic fits the workflow).  This is the same pattern used in
-   remi-org-db, where =tag_category()= classifies at indexing time.
-
-   *Links:* extracted as =.links: tuple[Link, ...]=.  Each =Link= carries
-   =.target= (the raw link target as it appears inside =[[...]]=, e.g.
-   ="id:abc-123"=, ="https://example.com"=, ="Some heading"= for fuzzy)
-   and =.description=.  The consumer extracts the schema and groups links
-   into categories as needed.
-
-   remi-org-parse classified links into 6 hardcoded categories (including
-   =excalidraw_links=, specific to one workflow).  org-dex-parse removes
-   this coupling: the parser is workflow-agnostic, the consumer owns the
-   classification.
-
-* Public API
-
-  #+begin_example
-  ┌────────────────────────────────────────────────────────────────────┐
-  │                          org_dex_parse                            │
-  ├────────────────────────────────────────────────────────────────────┤
-  │                                                                    │
-  │  Entry point                                                       │
-  │  ───────────                                                       │
-  │  parse_file(path, config) ──→ ParseResult                          │
-  │                                  └── .items: tuple[Item, ...]     │
-  │                                                                    │
-  │  Configuration                                                     │
-  │  ─────────────                                                     │
-  │  Config (frozen)                                                   │
-  │    .item_predicate          (headline) → bool                     │
-  │    .todos                                                          │
-  │    .dones                                                          │
-  │    .tags_exclude_from_inheritance                                  │
-  │    .extra_tag_chars           default "" (no monkey-patch)        │
-  │    .exclude_drawers                                                │
-  │    .exclude_blocks                                                 │
-  │    .exclude_properties                                             │
-  │    .created_property          default "CREATED"                   │
-  │                                                                    │
-  │  Data types                                                        │
-  │  ──────────                                                        │
-  │  Item (frozen, 24 fields)         Link (frozen)                   │
-  │    .title                           .target  ← raw, e.g.         │
-  │    .item_id                            "id:abc-123"               │
-  │    .todo                            .description                  │
-  │    .priority                                                       │
-  │    .level                         Timestamp (frozen)              │
-  │    .parent_item_id                  .date                         │
-  │    .local_tags                      .active                       │
-  │    .inherited_tags                  .repeater                     │
-  │    .body                                                           │
-  │    .raw_text                      Range (frozen)                  │
-  │    .scheduled                       .start                        │
-  │    .deadline                        .end                          │
-  │    .closed                          .active                       │
-  │    .created                                                        │
-  │    .archived                      ClockEntry (frozen)             │
-  │    .active_ts                       .start                        │
-  │    .inactive_ts                     .end                          │
-  │    .range_ts                        .duration_minutes             │
-  │    .clock                                                          │
-  │    .state_changes                 StateChange (frozen)            │
-  │    .properties                      .to_state                     │
-  │    .links  ← flat, unclassified     .from_state                  │
-  │    .linenumber                      .timestamp                    │
-  │    .file_path                                                      │
-  │                                                                    │
-  └────────────────────────────────────────────────────────────────────┘
-  #+end_example
-
-* Consumers
-  - =org-dex= — indexing engine (primary consumer)
-  - CLI tools — batch analysis, validation
-
-* Limitations
-  - *LOGBOOK drawer name is hardcoded.*  The timestamp filter excludes the
-    =:LOGBOOK:...:END:= drawer (the default when =org-log-into-drawer= is =t=).
-    Custom drawer names (=org-log-into-drawer= set to a string) and inline
-    logging (=org-log-into-drawer= = =nil=) are not supported — logging
-    timestamps would leak into =inactive_ts= as false positives.
-
-* Development
   #+begin_src sh
-    cd org-dex-parse/
-    .venv/bin/python -m pytest tests/ -v
+  pip install org-dex-parse
   #+end_src
 
-  Requires Python >=3.11.  Single dependency: =orgparse>=0.4=.
+  Requires Python >= 3.11.  Single dependency: =orgparse>=0.4,<0.5=.
+
+* Quick start
+  #+begin_src python
+  from org_dex_parse import parse_file, Config
+
+  result = parse_file("notes.org", Config())
+
+  for item in result.items:
+      print(item.title, item.item_id)
+  #+end_src
+
+  =parse_file= returns a =ParseResult= containing a tuple of =Item= objects —
+  one for each heading that has an =:ID:= property and passes the configured
+  predicate.
+
+* How it works
+  Given an org file, the parser:
+
+  1. Loads the file via orgparse
+  2. Walks the tree in document order
+  3. Identifies *items* — headings with =:ID:= that pass the predicate
+  4. For each item, extracts 24 structured fields (see [[*Item fields][Item fields]])
+
+  Headings without =:ID:= (or that don't pass the predicate) are
+  *scaffolding*: their content (body, timestamps, links, clock) rolls up
+  into the nearest ancestor item.
+
+** Example 1: default predicate — items and scaffolding
+   With =Config()= (default), every heading with =:ID:= is an item.
+   Headings without =:ID:= are scaffolding — their content rolls up into
+   the nearest ancestor item.
+
+   #+begin_example
+   * Project
+   ** TODO Write report                                       :work:
+      DEADLINE: <2026-04-01>
+      :PROPERTIES:
+      :ID:       a1b2c3
+      :END:
+   *** Notes
+       Some text with [[id:ref][a link]].
+       Meeting on <2026-03-20 Thu>.
+   ** DONE Review draft
+      CLOSED: [2026-03-15 Sun 10:00]
+      :PROPERTIES:
+      :ID:       d4e5f6
+      :END:
+   ** Background reading
+      No :ID: here — just an organizational heading.
+   #+end_example
+
+   #+begin_src python
+   config = Config(
+       todos=("TODO",),
+       dones=("DONE",),
+   )
+   result = parse_file("project.org", config)
+   # result.items → 2 items
+   #+end_src
+
+   | Heading      | =:ID:=? | Item? | Why                            |
+   |--------------+-------+-------+--------------------------------|
+   | Project      | no    | no    | No =:ID:= → scaffolding          |
+   | Write report | yes   | yes   | Has =:ID:=                       |
+   | Notes        | no    | no    | No =:ID:= → scaffolding of above |
+   | Review draft | yes   | yes   | Has =:ID:=                       |
+   | Bg reading   | no    | no    | No =:ID:= → scaffolding          |
+
+   "Notes" is scaffolding under "Write report".  Its body text, the link
+   =[[id:ref][a link]]=, and the timestamp =<2026-03-20>= all become part
+   of the "Write report" item:
+
+   #+begin_src python
+   item = result.items[0]  # Write report
+   item.title           # "Write report"
+   item.todo            # "TODO"
+   item.local_tags      # frozenset({"work"})
+   item.deadline.date   # datetime.date(2026, 4, 1)
+   item.active_ts[0].date  # datetime.date(2026, 3, 20)  ← from "Notes"
+   item.links[0].target    # "id:ref"                    ← from "Notes"
+   item.body            # "Notes\nSome text with a link.\nMeeting on ..."
+   #+end_src
+
+** Example 2: =:Type:= predicate — narrower item definition
+   With =Config(item_predicate=["property", "Type"])=, a heading must have
+   *both* =:ID:= and a =:Type:= property to be an item:
+
+   #+begin_example
+   * Inbox
+     :PROPERTIES:
+     :ID:       aaa-111
+     :Type:     area
+     :END:
+   ** TODO Buy groceries
+      SCHEDULED: <2026-03-17 Tue>
+      :PROPERTIES:
+      :ID:       bbb-222
+      :Type:     task
+      :END:
+   ** Grocery list
+      :PROPERTIES:
+      :ID:       ccc-333
+      :END:
+      - Milk
+      - Bread
+   #+end_example
+
+   #+begin_src python
+   config = Config(
+       item_predicate=["property", "Type"],
+       todos=("TODO",),
+       dones=("DONE",),
+   )
+   result = parse_file("inbox.org", config)
+   # result.items → 2 items (Inbox, Buy groceries)
+   # "Grocery list" has :ID: but no :Type: → scaffolding
+   #+end_src
+
+   | Heading       | =:ID:=? | =:Type:=? | Item? | Why                                  |
+   |---------------+-------+---------+-------+--------------------------------------|
+   | Inbox         | yes   | =area=    | yes   | Has =:ID:= + =:Type:=                    |
+   | Buy groceries | yes   | =task=    | yes   | Has =:ID:= + =:Type:=                    |
+   | Grocery list  | yes   | —       | no    | Has =:ID:= but no =:Type:= → scaffolding |
+
+   "Grocery list" is scaffolding — but it's at level 2, a sibling of "Buy
+   groceries", not its child.  Both are children of "Inbox".  So "Grocery
+   list" content rolls up to *Inbox*, not "Buy groceries":
+
+   #+begin_src python
+   inbox = result.items[0]  # Inbox
+   inbox.body              # "Grocery list\n- Milk\n- Bread"
+
+   item = result.items[1]  # Buy groceries
+   item.scheduled.date     # datetime.date(2026, 3, 17)
+   item.properties         # (("Type", "task"),)
+   item.parent_item_id     # "aaa-111"  ← Inbox is the parent item
+   item.body               # None — no scaffolding under this item
+   #+end_src
+
+** Example 3: org-roam style — exclude archived nodes
+   org-roam users typically want every =:ID:= heading *except* those marked
+   with =ROAM_EXCLUDE=.  The =not= operator handles this:
+
+   #+begin_example
+   * Main topic
+     :PROPERTIES:
+     :ID:       roam-001
+     :END:
+     This is a permanent note.
+     See also [[https://example.com/reference][Reference paper]].
+   ** Supporting argument
+      :PROPERTIES:
+      :ID:       roam-002
+      :END:
+      Evidence from [[id:roam-005][another note]].
+   ** COMMENT Draft section
+      :PROPERTIES:
+      :ID:       roam-003
+      :ROAM_EXCLUDE: t
+      :END:
+      Work in progress — not ready for the graph.
+   #+end_example
+
+   #+begin_src python
+   config = Config(
+       item_predicate=["not", ["property", "ROAM_EXCLUDE"]],
+   )
+   result = parse_file("roam-note.org", config)
+   # result.items → 2 items (Main topic, Supporting argument)
+   # "Draft section" is excluded by the predicate
+   #+end_src
+
+   | Heading    | =:ID:=? | =ROAM_EXCLUDE=? | Item? | Why                    |
+   |------------+-------+---------------+-------+------------------------|
+   | Main topic | yes   | no            | yes   | =:ID:= + not excluded     |
+   | Supporting | yes   | no            | yes   | =:ID:= + not excluded     |
+   | Draft      | yes   | =t=             | no    | =ROAM_EXCLUDE= → scaffold |
+
+   #+begin_src python
+   item = result.items[0]  # Main topic
+   item.links[0].target       # "https://example.com/reference"
+   item.links[0].description  # "Reference paper"
+   item.body
+   # "This is a permanent note.\n"
+   # "See also Reference paper.\n"
+   # "COMMENT Draft section\n"           ← scaffolding heading
+   # "Work in progress — not ready ..."  ← scaffolding body
+   #+end_src
+
+** Example 4: LOGBOOK data — clock entries and state changes
+   Clock entries and state changes are extracted from the =:LOGBOOK:=
+   drawer.  They are collected from the item and its scaffolding children.
+
+   #+begin_example
+   * TODO Deep work session                                   :focus:
+     SCHEDULED: <2026-03-17 Tue 09:00>
+     :PROPERTIES:
+     :ID:       clock-001
+     :END:
+     :LOGBOOK:
+     CLOCK: [2026-03-16 Mon 14:00]--[2026-03-16 Mon 15:30] =>  1:30
+     CLOCK: [2026-03-16 Mon 10:00]--[2026-03-16 Mon 11:45] =>  1:45
+     - State "TODO"       from "PLANNING"  [2026-03-15 Sun 09:00]
+     - State "PLANNING"   from              [2026-03-14 Sat 18:00]
+     :END:
+     Focus on the analysis section.
+   #+end_example
+
+   #+begin_src python
+   config = Config(
+       todos=("PLANNING", "TODO"),
+       dones=("DONE",),
+   )
+   result = parse_file("work.org", config)
+   item = result.items[0]
+
+   # Clock entries (collected from :LOGBOOK:)
+   len(item.clock)                  # 2
+   item.clock[0].start              # datetime(2026, 3, 16, 10, 0)
+   item.clock[0].end                # datetime(2026, 3, 16, 11, 45)
+   item.clock[0].duration_minutes   # 105
+   item.clock[1].start              # datetime(2026, 3, 16, 14, 0)
+   item.clock[1].duration_minutes   # 90
+
+   # State changes (chronological order)
+   len(item.state_changes)               # 2
+   item.state_changes[0].to_state        # "PLANNING"
+   item.state_changes[0].from_state      # None  ← first assignment
+   item.state_changes[1].to_state        # "TODO"
+   item.state_changes[1].from_state      # "PLANNING"
+
+   # Body excludes LOGBOOK content
+   item.body   # "Focus on the analysis section."
+   #+end_src
+
+** Example 5: timestamps — dedicated vs generic
+   The parser distinguishes *dedicated* timestamps (=SCHEDULED=, =DEADLINE=,
+   =CLOSED=, =created=, =archived=) from *generic* timestamps found in the
+   body text.  Each has its own field — no double-counting.
+
+   #+begin_example
+   * DONE Submit paper
+     SCHEDULED: <2026-03-01 Sun> DEADLINE: <2026-03-10 Tue> CLOSED: [2026-03-09 Mon 23:55]
+     :PROPERTIES:
+     :ID:       ts-001
+     :CREATED:  [2026-01-10 Sat]
+     :ARCHIVE_TIME: 2026-03-15 Sun 12:00
+     :END:
+     Submitted before the deadline.
+     Conference is <2026-06-15 Mon>--<2026-06-18 Thu>.
+     Received confirmation on [2026-03-10 Tue].
+   #+end_example
+
+   #+begin_src python
+   config = Config(dones=("DONE",))
+   result = parse_file("paper.org", config)
+   item = result.items[0]
+
+   # Dedicated timestamps — from planning line and properties
+   item.scheduled.date       # datetime.date(2026, 3, 1)
+   item.scheduled.active     # True   (angle brackets)
+   item.deadline.date        # datetime.date(2026, 3, 10)
+   item.closed.date          # datetime.datetime(2026, 3, 9, 23, 55)
+   item.closed.active        # False  (square brackets)
+   item.created.date         # datetime.date(2026, 1, 10)
+   item.archived.date        # datetime.datetime(2026, 3, 15, 12, 0)
+
+   # Generic timestamps — from body text only (no overlap with above)
+   len(item.active_ts)       # 0  ← the range endpoints are NOT here
+   len(item.inactive_ts)     # 1  ← [2026-03-10 Tue]
+   len(item.range_ts)        # 1  ← the conference range
+   item.range_ts[0].start.date  # datetime.date(2026, 6, 15)
+   item.range_ts[0].end.date    # datetime.date(2026, 6, 18)
+   item.range_ts[0].active      # True
+   #+end_src
+
+   *Scaffolding planning lines become generic timestamps.*  The rule above
+   (dedicated fields, no double-counting) applies only to the item's own
+   planning line.  When a scaffolding heading has =SCHEDULED=, =DEADLINE=,
+   or =CLOSED=, those timestamps have no dedicated destination — they are
+   promoted to generic timestamps (=active_ts= / =inactive_ts=) so they are
+   not lost.
+
+   #+begin_example
+   * TODO Project plan
+     DEADLINE: <2026-04-01>
+     :PROPERTIES:
+     :ID:       plan-001
+     :END:
+   ** Phase 1
+      SCHEDULED: <2026-03-15 Sun>
+      Define requirements.
+   ** Phase 2
+      DEADLINE: <2026-03-25 Tue>
+      Build prototype.
+   #+end_example
+
+   #+begin_src python
+   config = Config(todos=("TODO",), dones=("DONE",))
+   result = parse_file("plan.org", config)
+   item = result.items[0]  # Project plan
+
+   # Item's own planning → dedicated field
+   item.deadline.date        # datetime.date(2026, 4, 1)
+
+   # Scaffolding planning → promoted to generic timestamps
+   # Phase 1's SCHEDULED and Phase 2's DEADLINE have no dedicated
+   # field on the parent item, so they become active_ts.
+   len(item.active_ts)       # 2
+   item.active_ts[0].date    # datetime.date(2026, 3, 15)  ← Phase 1 SCHEDULED
+   item.active_ts[1].date    # datetime.date(2026, 3, 25)  ← Phase 2 DEADLINE
+   #+end_src
+
+** Example 6: tags, properties, and inheritance
+   Tags on a heading are =local_tags=.  Tags from ancestors are
+   =inherited_tags= (minus any tags in =tags_exclude_from_inheritance=).
+   Properties come from the direct =:PROPERTIES:= drawer only — never from
+   children.
+
+   #+begin_example
+   #+FILETAGS: :project:
+
+   * Research                                                :science:
+     :PROPERTIES:
+     :ID:       tag-001
+     :Type:     area
+     :Effort:   3:00
+     :END:
+   ** Literature review                                       :reading:
+      :PROPERTIES:
+      :ID:       tag-002
+      :Type:     task
+      :END:
+   #+end_example
+
+   #+begin_src python
+   config = Config(
+       item_predicate=["property", "Type"],
+       tags_exclude_from_inheritance=frozenset({"noexport"}),
+   )
+   result = parse_file("research.org", config)
+
+   parent = result.items[0]  # Research
+   parent.local_tags       # frozenset({"science"})
+   parent.inherited_tags   # frozenset({"project"})  ← from FILETAGS
+   parent.properties       # (("Type", "area"), ("Effort", "180"))
+
+   child = result.items[1]  # Literature review
+   child.local_tags        # frozenset({"reading"})
+   child.inherited_tags    # frozenset({"project", "science"})
+   child.parent_item_id    # "tag-001"
+   child.properties        # (("Type", "task"),)
+   # Effort is NOT here — properties are per-heading, not inherited
+   #+end_src
+
+** Example 7: links — org-mode and bare URLs
+   Links are extracted from the complete =raw_text= of the item (including
+   scaffolding children and content inside excluded drawers).  Two kinds
+   are captured:
+
+   - *Org-mode links* — any =[[target]]= or =[[target][description]]=,
+     regardless of schema (=id:=, =https://=, =file:=, =./image.png=,
+     fuzzy, etc.).  The target is stored raw — the consumer extracts
+     the schema if needed.
+   - *Bare URLs* — =http://= and =https://= URLs outside of =[[...]]=.
+
+   #+begin_example
+   * Reference collection
+     :PROPERTIES:
+     :ID:       link-001
+     :END:
+     Key paper: [[https://arxiv.org/abs/2301.00001][Attention is all you need]].
+     Related note: [[id:abc-123][Transformer architecture]].
+     Blog post: https://example.com/transformers
+     :SEE_ALSO:
+     [[id:def-456][History of neural networks]]
+     :END:
+   #+end_example
+
+   #+begin_src python
+   config = Config(
+       exclude_drawers=frozenset({"see_also"}),
+   )
+   result = parse_file("refs.org", config)
+   item = result.items[0]
+
+   len(item.links)  # 4
+
+   item.links[0].target       # "https://arxiv.org/abs/2301.00001"
+   item.links[0].description  # "Attention is all you need"
+
+   item.links[1].target       # "id:abc-123"
+   item.links[1].description  # "Transformer architecture"
+
+   item.links[2].target       # "https://example.com/transformers"
+   item.links[2].description  # None  ← bare URL, no description
+
+   item.links[3].target       # "id:def-456"
+   item.links[3].description  # "History of neural networks"
+   # ↑ extracted from :SEE_ALSO: — links survive drawer exclusion
+
+   # Body EXCLUDES :SEE_ALSO: content
+   item.body
+   # "Key paper: Attention is all you need.\n"
+   # "Related note: Transformer architecture.\n"
+   # "Blog post: https://example.com/transformers"
+   #+end_src
+
+** Example 8: body and raw_text — what's included, what's filtered
+
+   =body= is the filtered text meant for display.  =raw_text= is the
+   complete unfiltered org-mode source.  Both include scaffolding children.
+
+   #+begin_example
+   * TODO Prepare presentation                                :work:
+     DEADLINE: <2026-04-01>
+     :PROPERTIES:
+     :ID:       body-001
+     :Type:     task
+     :END:
+     :LOGBOOK:
+     - State "TODO" from "PLANNING" [2026-03-15 Sun 09:00]
+     :END:
+     First draft of the slides.
+     See [[id:ref-001][design document]].
+   ** Outline
+      - Introduction (5 min)
+      - Main argument (15 min)
+      - Q&A (10 min)
+   #+end_example
+
+   #+begin_src python
+   config = Config(
+       item_predicate=["property", "Type"],
+       todos=("PLANNING", "TODO"),
+       dones=("DONE",),
+   )
+   result = parse_file("pres.org", config)
+   item = result.items[0]
+
+   # body: filtered, human-readable
+   # - PROPERTIES drawer: excluded (orgparse strips it from body)
+   # - LOGBOOK drawer: excluded (always, hardcoded)
+   # - "Outline" heading: INCLUDED (scaffolding heading text)
+   # - Link syntax resolved to description text
+   item.body
+   # "First draft of the slides.\n"
+   # "See design document.\n"
+   # "Outline\n"
+   # "- Introduction (5 min)\n"
+   # "- Main argument (15 min)\n"
+   # "- Q&A (10 min)"
+
+   # raw_text: complete unfiltered org source
+   # Includes PROPERTIES, LOGBOOK, link syntax, everything.
+   # Does NOT include content from other items.
+   "LOGBOOK" in item.raw_text       # True
+   ":ID:" in item.raw_text          # True
+   "[[id:ref-001]" in item.raw_text # True  ← raw link syntax preserved
+   #+end_src
+
+* Configuration
+  =Config= controls what the parser considers an item and how it extracts
+  data.  All fields have sensible defaults — the minimal config is
+  =Config()= (any heading with =:ID:= is an item).
+
+  #+begin_src python
+  from org_dex_parse import Config
+
+  config = Config(
+      # Which headings with :ID: are items (default: all of them)
+      item_predicate=["property", "Type"],
+
+      # TODO keywords for your org-mode setup
+      todos=("TODO", "NEXT", "DOING"),
+      dones=("DONE", "CANCELED"),
+
+      # Tags that don't propagate to children
+      # (matches org-tags-exclude-from-inheritance)
+      tags_exclude_from_inheritance=frozenset({"noexport", "pin"}),
+
+      # Drawers excluded from body text (not from links)
+      exclude_drawers=frozenset({"logbook", "see_also"}),
+
+      # Source blocks excluded from body text
+      exclude_blocks=frozenset({"comment"}),
+
+      # Properties omitted from Item.properties
+      exclude_properties=frozenset({"archive_file"}),
+
+      # Property name for creation date (default "CREATED")
+      created_property="CREATED",
+
+      # Extra characters allowed in tag names (default: none)
+      # Standard org-mode: [a-zA-Z0-9_@]
+      extra_tag_chars="%#",
+  )
+  #+end_src
+
+** Item predicate
+   The predicate determines which =:ID:= headings become items.  Three
+   forms are accepted:
+
+   | Form     | Example                                     | Use case                        |
+   |----------+---------------------------------------------+---------------------------------|
+   | =None=     | =Config()=                                    | All headings with =:ID:=          |
+   | =list=     | =Config(item_predicate=["property", "Type"])= | JSON-serializable (recommended) |
+   | =callable= | =Config(item_predicate=lambda h: ...)=        | Python-only                     |
+
+   The =list= form uses s-expressions (JSON arrays) with these operators:
+
+   | Operator | Example                                                              | Meaning                        |
+   |----------+----------------------------------------------------------------------+--------------------------------|
+   | =property= | =["property", "Type"]=                                                 | Has property =Type=              |
+   | =not=      | =["not", ["property", "ARCHIVE_TIME"]]=                                | Negation                       |
+   | =and=      | =["and", ["property", "Type"], ["not", ["property", "ARCHIVE_TIME"]]]= | All must match (short-circuit) |
+   | =or=       | =["or", expr1, expr2]=                                                 | Any must match (short-circuit) |
+
+   The =list= form is the recommended interface — it is serializable (JSON-RPC,
+   config files, CLI) and covers the common cases.  The =callable= form exists
+   for backward compatibility and advanced use.
+
+** TODO and DONE keywords
+   org-mode needs to know your TODO keywords to correctly parse headings.
+   If you use custom keywords, pass them in =Config=:
+
+   #+begin_src python
+   config = Config(
+       todos=("TODO", "NEXT", "WAITING"),
+       dones=("DONE", "CANCELED"),
+   )
+   #+end_src
+
+   Without this, headings like =** NEXT Write report= will have
+   =item.todo = None= and ="NEXT"= will be part of =item.title=.
+
+** Drawer and block exclusion
+   =exclude_drawers= and =exclude_blocks= control what is excluded from
+   =Item.body=.  They do *not* affect link extraction — links are extracted
+   from the complete raw text, so links inside excluded drawers are still
+   captured.
+
+   The =:LOGBOOK:= drawer is always excluded from body and from generic
+   timestamp extraction.  Its contents are parsed by dedicated handlers
+   (=Item.clock=, =Item.state_changes=).
+
+* Item fields
+
+  Each =Item= is a frozen (immutable) dataclass with 24 fields:
+
+  | Field          | Type                          | Description                                      |
+  |----------------+-------------------------------+--------------------------------------------------|
+  | =title=          | =str=                           | Heading text (without TODO/priority/tags)        |
+  | =item_id=        | =str=                           | Value of =:ID:= property                           |
+  | =level=          | =int=                           | Heading level (1, 2, 3...)                       |
+  | =linenumber=     | =int=                           | Source file line number                          |
+  | =file_path=      | =str=                           | Path to the org file                             |
+  | =todo=           | =str \vert None=                | TODO keyword (=None= if absent)                    |
+  | =priority=       | =str \vert None=                | Priority letter (=None= if absent)                 |
+  | =local_tags=     | =frozenset[str]=                | Tags on this heading                             |
+  | =inherited_tags= | =frozenset[str]=                | Tags from ancestor headings                      |
+  | =parent_item_id= | =str \vert None=                | =:ID:= of nearest item ancestor                    |
+  | =scheduled=      | =Timestamp \vert None=          | =SCHEDULED= planning timestamp                     |
+  | =deadline=       | =Timestamp \vert None=          | =DEADLINE= planning timestamp                      |
+  | =closed=         | =Timestamp \vert None=          | =CLOSED= planning timestamp                        |
+  | =created=        | =Timestamp \vert None=          | Creation date (from configured property)         |
+  | =archived=       | =Timestamp \vert None=          | Archive date (from =ARCHIVE_TIME= property)        |
+  | =active_ts=      | =tuple[Timestamp, ...]=         | Generic active timestamps from body              |
+  | =inactive_ts=    | =tuple[Timestamp, ...]=         | Generic inactive timestamps from body            |
+  | =range_ts=       | =tuple[Range, ...]=             | Date ranges from body                            |
+  | =clock=          | =tuple[ClockEntry, ...]=        | CLOCK entries from =:LOGBOOK:=                     |
+  | =state_changes=  | =tuple[StateChange, ...]=       | State transitions from =:LOGBOOK:=                 |
+  | =body=           | =str \vert None=                | Body text (filtered, =None= if empty)              |
+  | =raw_text=       | =str=                           | Complete unfiltered source text                  |
+  | =links=          | =tuple[Link, ...]=              | All links (org-mode + bare URLs)                 |
+  | =properties=     | =tuple[tuple[str, str], ...]= | Properties (excluding =ID=, =ARCHIVE_TIME=, created) |
+
+** Supporting types
+
+   #+begin_src python
+   Timestamp(date, active, repeater)
+   #   date: datetime.date | datetime.datetime
+   #   active: bool            # <...> = True, [...] = False
+   #   repeater: str | None    # e.g. "+1w"
+
+   Link(target, description)
+   #   target: str             # raw, e.g. "id:abc", "https://...", "Heading"
+   #   description: str | None
+
+   Range(start, end, active)
+   #   start: Timestamp
+   #   end: Timestamp
+   #   active: bool
+
+   ClockEntry(start, end, duration_minutes)
+   #   start: datetime.datetime
+   #   end: datetime.datetime | None      # None for running clocks
+   #   duration_minutes: int | None       # None for running clocks
+
+   StateChange(to_state, from_state, timestamp)
+   #   to_state: str                      # e.g. "DONE"
+   #   from_state: str | None             # e.g. "TODO", None for first
+   #   timestamp: datetime.datetime
+   #+end_src
+
+* CLI
+
+  A development/exploration CLI is included:
+
+  #+begin_src sh
+  # Bare config (any heading with :ID:)
+  python -m org_dex_parse --bare file.org
+
+  # With a predicate
+  python -m org_dex_parse --predicate '["property", "Type"]' file.org
+
+  # Verbose (show raw_text preview)
+  python -m org_dex_parse --bare -v file.org
+  #+end_src
+
+  Note: without =--bare= or =--predicate=, the CLI uses a built-in
+  configuration specific to the author's workflow.  Use =--bare= for a
+  neutral default, or =--predicate= for your own item definition.
+
+* Assumptions and requirements
+  The parser makes the following assumptions about the org files it
+  processes:
+
+  - *=:ID:= is required.* A heading without an =:ID:= property is never an
+    item — it is scaffolding.  This is a structural invariant, not a
+    configurable option.
+
+  - *TODO keywords must be declared.* org-mode determines TODO keywords at
+    file level (=#+TODO:=) or in Emacs configuration.  The parser doesn't
+    read Emacs config — pass your keywords in =Config.todos= / =Config.dones=.
+    Without them, keywords are not recognized and become part of the
+    heading title.
+
+  - *=org-log-into-drawer= must be =t=* (the org-mode default).  The parser
+    filters the =:LOGBOOK:= drawer by name.  Custom drawer names and inline
+    logging are not supported (see [[*Limitations][Limitations]]).
+
+* Limitations
+  Known limitations of v0.1.0.
+
+** LOGBOOK drawer name is hardcoded
+   The parser assumes =org-log-into-drawer= is =t= (Emacs default), which
+   means logging goes into a drawer named =:LOGBOOK:=.  If your setup uses
+   a custom drawer name (=org-log-into-drawer= set to a string) or inline
+   logging (=org-log-into-drawer= set to =nil=), logging timestamps will
+   leak into =inactive_ts= as false positives.
+
+** Clock entry ordering
+   =Item.clock= entries are collected from the item heading and its
+   scaffolding children, then reversed to approximate chronological order.
+   When clock entries from different nodes are temporally interleaved, the
+   ordering may not be strictly chronological.
+
+** Tag character monkey-patch is not thread-safe
+   When =Config.extra_tag_chars= is non-empty, the parser temporarily
+   modifies a global regex in orgparse to allow the extra characters.  This
+   is not thread-safe — do not call =parse_file= concurrently from multiple
+   threads with different =extra_tag_chars= values.  Single-threaded use
+   (including sequential calls with different configs) is safe.
+
+** Date validation on timestamp properties
+   A syntactically valid but impossible date in a property value (e.g.
+   =2026-02-31=) will raise a =ValueError= instead of degrading gracefully
+   to =None=.  This affects =created= and =archived= fields.
+
+** COMMENT keyword not handled
+   org-mode treats headings starting with =COMMENT= as excluded from
+   export.  The parser does not recognize =COMMENT= as a special keyword —
+   it becomes part of =Item.title= (or part of the scaffolding heading
+   text in =body=).  If a =COMMENT= heading has =:ID:= and passes the
+   predicate, it produces an item like any other heading.
+
+** Encrypted headings (org-crypt) not handled
+   org-mode supports encrypting subtrees via =org-crypt=.  The encrypted
+   body (a PGP/GPG blob) is opaque text — the parser processes it as
+   regular body content, extracting meaningless timestamps, links, and
+   text from the ciphertext.
+
+** orgparse private API dependency
+   The parser accesses 4 private attributes of orgparse (=_repeater=,
+   =_duration=, =_body_lines=, =RE_HEADING_TAGS=).  These are protected by
+   guard tests and a version pin (=orgparse>=0.4,<0.5=), but may break if
+   orgparse changes its internals within the pinned range.
+
+* Development
+
+  #+begin_src sh
+  git clone https://github.com/gdvek/org-dex-parse.git
+  cd org-dex-parse
+  python -m venv .venv
+  source .venv/bin/activate
+  pip install -e ".[dev]"
+  pytest tests/ -v
+  #+end_src
 
 * License
   GPL-3.0-or-later

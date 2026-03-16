@@ -1,0 +1,13 @@
+#+FILETAGS: :project:
+
+* Research                                                :science:
+  :PROPERTIES:
+  :ID:       tag-001
+  :Type:     area
+  :Effort:   3:00
+  :END:
+** Literature review                                       :reading:
+   :PROPERTIES:
+   :ID:       tag-002
+   :Type:     task
+   :END:

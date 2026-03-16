@@ -1,0 +1,12 @@
+* TODO Deep work session                                   :focus:
+  SCHEDULED: <2026-03-17 Tue 09:00>
+  :PROPERTIES:
+  :ID:       clock-001
+  :END:
+  :LOGBOOK:
+  CLOCK: [2026-03-16 Mon 14:00]--[2026-03-16 Mon 15:30] =>  1:30
+  CLOCK: [2026-03-16 Mon 10:00]--[2026-03-16 Mon 11:45] =>  1:45
+  - State "TODO"       from "PLANNING"  [2026-03-15 Sun 09:00]
+  - State "PLANNING"   from              [2026-03-14 Sat 18:00]
+  :END:
+  Focus on the analysis section.

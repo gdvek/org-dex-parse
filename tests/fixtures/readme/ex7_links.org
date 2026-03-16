@@ -1,0 +1,10 @@
+* Reference collection
+  :PROPERTIES:
+  :ID:       link-001
+  :END:
+  Key paper: [[https://arxiv.org/abs/2301.00001][Attention is all you need]].
+  Related note: [[id:abc-123][Transformer architecture]].
+  Blog post: https://example.com/transformers
+  :SEE_ALSO:
+  [[id:def-456][History of neural networks]]
+  :END:

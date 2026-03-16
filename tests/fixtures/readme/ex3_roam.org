@@ -1,0 +1,17 @@
+* Main topic
+  :PROPERTIES:
+  :ID:       roam-001
+  :END:
+  This is a permanent note.
+  See also [[https://example.com/reference][Reference paper]].
+** Supporting argument
+   :PROPERTIES:
+   :ID:       roam-002
+   :END:
+   Evidence from [[id:roam-005][another note]].
+** COMMENT Draft section
+   :PROPERTIES:
+   :ID:       roam-003
+   :ROAM_EXCLUDE: t
+   :END:
+   Work in progress — not ready for the graph.

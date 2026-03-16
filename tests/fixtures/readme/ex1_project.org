@@ -1,0 +1,16 @@
+* Project
+** TODO Write report                                       :work:
+   DEADLINE: <2026-04-01>
+   :PROPERTIES:
+   :ID:       a1b2c3
+   :END:
+*** Notes
+    Some text with [[id:ref][a link]].
+    Meeting on <2026-03-20 Thu>.
+** DONE Review draft
+   CLOSED: [2026-03-15 Sun 10:00]
+   :PROPERTIES:
+   :ID:       d4e5f6
+   :END:
+** Background reading
+   No :ID: here — just an organizational heading.

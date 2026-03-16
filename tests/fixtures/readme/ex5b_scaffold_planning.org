@@ -1,0 +1,11 @@
+* TODO Project plan
+  DEADLINE: <2026-04-01>
+  :PROPERTIES:
+  :ID:       plan-001
+  :END:
+** Phase 1
+   SCHEDULED: <2026-03-15 Sun>
+   Define requirements.
+** Phase 2
+   DEADLINE: <2026-03-25 Tue>
+   Build prototype.

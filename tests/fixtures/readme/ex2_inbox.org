@@ -1,0 +1,17 @@
+* Inbox
+  :PROPERTIES:
+  :ID:       aaa-111
+  :Type:     area
+  :END:
+** TODO Buy groceries
+   SCHEDULED: <2026-03-17 Tue>
+   :PROPERTIES:
+   :ID:       bbb-222
+   :Type:     task
+   :END:
+** Grocery list
+   :PROPERTIES:
+   :ID:       ccc-333
+   :END:
+   - Milk
+   - Bread

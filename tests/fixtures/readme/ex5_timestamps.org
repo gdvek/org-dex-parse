@@ -1,0 +1,10 @@
+* DONE Submit paper
+  SCHEDULED: <2026-03-01 Sun> DEADLINE: <2026-03-10 Tue> CLOSED: [2026-03-09 Mon 23:55]
+  :PROPERTIES:
+  :ID:       ts-001
+  :CREATED:  [2026-01-10 Sat]
+  :ARCHIVE_TIME: 2026-03-15 Sun 12:00
+  :END:
+  Submitted before the deadline.
+  Conference is <2026-06-15 Mon>--<2026-06-18 Thu>.
+  Received confirmation on [2026-03-10 Tue].

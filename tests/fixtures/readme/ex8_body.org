@@ -1,0 +1,15 @@
+* TODO Prepare presentation                                :work:
+  DEADLINE: <2026-04-01>
+  :PROPERTIES:
+  :ID:       body-001
+  :Type:     task
+  :END:
+  :LOGBOOK:
+  - State "TODO" from "PLANNING" [2026-03-15 Sun 09:00]
+  :END:
+  First draft of the slides.
+  See [[id:ref-001][design document]].
+** Outline
+   - Introduction (5 min)
+   - Main argument (15 min)
+   - Q&A (10 min)

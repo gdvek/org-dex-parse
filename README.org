@@ -1,20 +1,99 @@
 #+title: org-dex-parse
 #+author: gdvek
 
-Parse org-mode files into structured data.  Built for [[https://github.com/gdvek/org-dex][org-dex]], usable
-standalone.  Uses [[https://github.com/karlicoss/orgparse][orgparse]] as the parsing backend.
+Extract structured data from org-mode files.  Point it at an =.org= file,
+get back Python objects — titles, timestamps, links, tags, clock entries,
+properties, and more — ready to query, store, or pipe into whatever
+you're building.
 
-org-dex-parse is a semantic layer on top of orgparse.  It walks the
-parsed tree, discriminates *items* (indexed entities) from
-*scaffolding* (organizational headings), and extracts 24 structured
-fields per item — timestamps, links, tags, clock entries, state
-changes, body text, and properties — using zone-aware extraction
-policies and a configurable predicate.
+Built for [[https://github.com/gdvek/org-dex][org-dex]], usable standalone.  Uses [[https://github.com/karlicoss/orgparse][orgparse]] as the parsing
+backend.
 
-* Why org-dex-parse
-  org-dex-parse adds domain logic on top of orgparse's syntax tree.
-  orgparse handles the org-mode grammar; org-dex-parse handles item
-  discrimination, field extraction, and content filtering.
+* Try it
+** From the command line
+
+  #+begin_src sh
+  pip install org-dex-parse   # Python >= 3.11
+  #+end_src
+
+  Use one of your own org files, or create a test file:
+
+  #+begin_example
+  * TODO Write report                                       :work:
+    DEADLINE: <2026-04-01>
+    :PROPERTIES:
+    :ID:  abc-001
+    :END:
+  ** Notes
+     Some references: [[id:other][see also]].
+  * DONE Review draft
+    CLOSED: [2026-03-15 Sun 10:00]
+    :PROPERTIES:
+    :ID:  abc-002
+    :END:
+  #+end_example
+
+  #+begin_src sh
+  python -m org_dex_parse example.org
+  #+end_src
+
+  Output:
+
+  #+begin_example
+  example.org: 2 items
+    Write report
+      id=abc-001  level=1  line=1
+      todo=TODO
+      local_tags={'work'}
+    Review draft
+      id=abc-002  level=1  line=9
+      todo=DONE
+  #+end_example
+
+  Add =-v= to include body text, =--json= for machine-readable output.
+
+  A ready-made config file is included for common setups:
+
+  #+begin_src sh
+  python -m org_dex_parse --config examples/config.json example.org
+  #+end_src
+
+  It covers TODO keywords, drawer filtering, and item selection rules
+  for a typical org-mode setup.  Copy it and adjust to your needs — the
+  fields are documented in [[*Configuration][Configuration]].
+
+** From Python
+
+  #+begin_src python
+  from org_dex_parse import parse_file, Config
+
+  result = parse_file("notes.org", Config())
+
+  for item in result.items:
+      print(f"{item.todo or ''} {item.title}")
+      print(f"  id={item.item_id}  tags={item.local_tags}")
+      if item.deadline:
+          print(f"  deadline={item.deadline.date}")
+      if item.links:
+          print(f"  links={len(item.links)}")
+  #+end_src
+
+  Each =Item= in =result.items= is a heading with =:ID:= that passed
+  the configured predicate — see [[*Key concepts][Key concepts]].
+
+* Key concepts
+  The parser distinguishes two kinds of headings:
+
+  - *Items* — headings with =:ID:= that pass the predicate.  Each produces
+    a 24-field structured object.
+  - *Scaffolding* — everything else.  Organizational headings whose
+    content (body, links, timestamps, clock) rolls up into the nearest
+    ancestor item.  Nothing is lost — scaffolding content is collected,
+    not discarded.
+
+  You control what counts as an item through a *predicate*.  The default
+  accepts every heading with =:ID:=.  You can narrow it — for example,
+  require a =:Type:= property, or exclude headings with =ROAM_EXCLUDE=.
 
   #+begin_example
                       org file
@@ -35,62 +114,8 @@ policies and a configurable predicate.
      (DB + UI)     (knowledge graphs)(analytics)
   #+end_example
 
-  - *Configurable item definition* — an s-expression predicate
-    (JSON-serializable, cross-process) decides which =:ID:= headings
-    are items and which are scaffolding.  No code changes required.
-  - *Zone-aware extraction* — different exclusion policies for body,
-    links, and timestamps. Custom drawers can be excluded from body
-    while their links are still captured.
-  - *Scaffolding roll-up* — headings without =:ID:= (or that fail the
-    predicate) are not discarded.  Their content — body, links,
-    timestamps, clock — rolls up into the nearest ancestor item.
-
-* Design choices
-  - *orgparse does syntax, org-dex-parse does domain logic.*  The
-    parser does not re-implement the org-mode grammar — it delegates
-    low-level parsing to orgparse and focuses on item discrimination,
-    field extraction, and zone-aware filtering.
-
-* Performance
-  Extraction profile on a real-world org archive (4,380 items, Linux, Python 3.11):
-
-  | Field          | Count |
-  |----------------+-------|
-  | title          |  4380 |
-  | item_id        |  4380 |
-  | level          |  4380 |
-  | linenumber     |  4380 |
-  | file_path      |  4380 |
-  | todo           |  4380 |
-  | priority       |  1442 |
-  | local_tags     |  4380 |
-  | inherited_tags |  4358 |
-  | parent_item_id |     0 |
-  | scheduled      |    40 |
-  | deadline       |     4 |
-  | closed         |  4369 |
-  | created        |     0 |
-  | archived       |  4380 |
-  | active_ts      |  2453 |
-  | inactive_ts    |   255 |
-  | range_ts       |  1874 |
-  | clock          |   251 |
-  | state_changes  |   872 |
-  | body           |  3124 |
-  | raw_text       |  4380 |
-  | links          | 10214 |
-  | properties     |  4755 |
-
-
-  |                 |         |
-  | File size       | 5.0 MB  |
-  | Lines           | 135,511 |
-  | Extraction time | 2.5 s   |
-
-  Breakdown: orgparse loads the syntax tree in ~1.5 s, org-dex-parse
-  walks the tree and extracts all fields in ~1.0 s.  The extraction
-  phase uses O(n) pre-computed caches for parent lookup and tag
-  inheritance.
+  orgparse handles the org-mode grammar.  org-dex-parse handles item
+  discrimination, field extraction, and content filtering.
 
 * Installation
 
@@ -100,31 +125,11 @@ policies and a configurable predicate.
 
   Requires Python >= 3.11.  Single dependency: =orgparse>=0.4,<0.5=.
 
-* Quick start
-  #+begin_src python
-  from org_dex_parse import parse_file, Config
+* Examples
 
-  result = parse_file("notes.org", Config())
-
-  for item in result.items:
-      print(item.title, item.item_id)
-  #+end_src
-
-  =parse_file= returns a =ParseResult= containing a tuple of =Item= objects —
-  one for each heading that has an =:ID:= property and passes the configured
-  predicate.
-
-* How it works
-  Given an org file, the parser:
-
-  1. Loads the file via orgparse
-  2. Walks the tree in document order
-  3. Identifies *items* — headings with =:ID:= that pass the predicate
-  4. For each item, extracts 24 structured fields (see [[*Item fields][Item fields]])
-
-  Headings without =:ID:= (or that don't pass the predicate) are
-  *scaffolding*: their content (body, timestamps, links, clock) rolls up
-  into the nearest ancestor item.
+  The examples below show the parser on increasingly complex org files.
+  Each starts with the org source, then shows the Python code and what
+  each field contains.
 
 ** Example 1: default predicate — items and scaffolding
    With =Config()= (default), every heading with =:ID:= is an item.
@@ -621,7 +626,7 @@ policies and a configurable predicate.
    config files, CLI) and covers the common cases.  The =callable= form exists
    for backward compatibility and advanced use.
 
-** \TODO and DONE keywords
+** "TODO" and "DONE" keywords
    org-mode needs to know your TODO keywords to correctly parse headings.
    If you use custom keywords, pass them in =Config=:
 
@@ -646,7 +651,7 @@ policies and a configurable predicate.
    (=Item.clock=, =Item.state_changes=).
 
 * Item fields
-  
+
   Each =Item= is a frozen (immutable) dataclass with 24 fields:
 
   | Field          | Type                          | Description                                      |
@@ -704,8 +709,9 @@ policies and a configurable predicate.
    #   timestamp: datetime.datetime
    #+end_src
 
-* CLI
-  A CLI is included for exploration and scripting:
+* CLI reference
+  All =Config= fields are available as CLI flags.  Run
+  =python -m org_dex_parse --help= for the full list.
 
   #+begin_src sh
   # Default: any heading with :ID: is an item
@@ -728,9 +734,6 @@ policies and a configurable predicate.
   python -m org_dex_parse --json -vv file.org
   #+end_src
 
-  All =Config= fields are available as CLI flags.  Run
-  =python -m org_dex_parse --help= for the full list.
-
   An example config file is included in =examples/config.json= — it
   documents all available fields and can be used directly:
 
@@ -740,6 +743,47 @@ policies and a configurable predicate.
 
   *Precedence:* CLI flags override config file values, which override
   defaults.
+
+* Performance
+  Extraction profile on a real-world org archive (4,380 items, Linux, Python 3.11):
+
+  | Field          | Count |
+  |----------------+-------|
+  | title          |  4380 |
+  | item_id        |  4380 |
+  | level          |  4380 |
+  | linenumber     |  4380 |
+  | file_path      |  4380 |
+  | todo           |  4380 |
+  | priority       |  1442 |
+  | local_tags     |  4380 |
+  | inherited_tags |  4358 |
+  | parent_item_id |     0 |
+  | scheduled      |    40 |
+  | deadline       |     4 |
+  | closed         |  4369 |
+  | created        |     0 |
+  | archived       |  4380 |
+  | active_ts      |  2453 |
+  | inactive_ts    |   255 |
+  | range_ts       |  1874 |
+  | clock          |   251 |
+  | state_changes  |   872 |
+  | body           |  3124 |
+  | raw_text       |  4380 |
+  | links          | 10214 |
+  | properties     |  4755 |
+
+
+  |                 |         |
+  | File size       | 5.0 MB  |
+  | Lines           | 135,511 |
+  | Extraction time | 2.5 s   |
+
+  Breakdown: orgparse loads the syntax tree in ~1.5 s, org-dex-parse
+  walks the tree and extracts all fields in ~1.0 s.  The extraction
+  phase uses O(n) pre-computed caches for parent lookup and tag
+  inheritance.
 
 * Assumptions and requirements
   The parser makes the following assumptions about the org files it

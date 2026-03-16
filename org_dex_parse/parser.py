@@ -7,6 +7,7 @@ ParseResult with structural fields and raw_text.
 """
 from __future__ import annotations
 
+import bisect
 import datetime
 import re
 import textwrap
@@ -67,8 +68,10 @@ def _extract_links(text: str) -> tuple[Link, ...]:
     # Collect (start_position, Link) pairs from both passes, then
     # sort by position to interleave org links and bare URLs correctly.
     found: list[tuple[int, Link]] = []
-    # Spans occupied by pass-1 matches — used by pass 2 for dedup.
-    occupied: list[tuple[int, int]] = []
+    # Span starts/ends occupied by pass-1 matches — parallel lists used
+    # by pass 2 for O(log k) dedup via bisect (S30).
+    occ_starts: list[int] = []
+    occ_ends: list[int] = []
 
     # -- Pass 1: org-mode links -----------------------------------------------
     for m in _RE_ORG_LINK.finditer(text):
@@ -76,14 +79,18 @@ def _extract_links(text: str) -> tuple[Link, ...]:
         description = m.group(2)  # None if no [desc] part
         found.append((m.start(), Link(target=raw_target,
                                       description=description)))
-        occupied.append((m.start(), m.end()))
+        occ_starts.append(m.start())
+        occ_ends.append(m.end())
 
     # -- Pass 2: bare URLs ----------------------------------------------------
     for m in _RE_BARE_URL.finditer(text):
         # Skip if this bare URL overlaps any org-link span (AC5).
+        # S30: bisect_right finds the rightmost span with start <= bare_start.
+        # Org-link spans are non-overlapping and ordered by start (re.finditer
+        # guarantee), so only that one candidate span can contain bare_start.
         bare_start = m.start()
-        if any(occ_s <= bare_start < occ_e
-               for occ_s, occ_e in occupied):
+        idx = bisect.bisect_right(occ_starts, bare_start)
+        if idx > 0 and bare_start < occ_ends[idx - 1]:
             continue
 
         url = m.group()

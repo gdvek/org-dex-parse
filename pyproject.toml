@@ -9,7 +9,7 @@ description = "Parse org-mode files into structured data for the org-dex indexin
 license = "GPL-3.0-or-later"
 requires-python = ">=3.11"
 dependencies = [
-    "orgparse>=0.4",
+    "orgparse>=0.4,<0.5",
 ]
 
 [project.optional-dependencies]

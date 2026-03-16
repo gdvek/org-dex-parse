@@ -1,0 +1,19 @@
+#+title: Changelog
+
+All notable changes to org-dex-parse are documented in this file.
+
+Format follows [[https://keepachangelog.com/en/1.1.0/][Keep a Changelog]].
+Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
+
+* [0.1.0] — 2026-03-16
+
+Initial release.
+
+** Added
+- Parse org-mode files into structured =Item= dataclasses (24 fields)
+- Configurable item predicate via s-expression evaluator
+- Zone-aware extraction: body, links, timestamps, clock entries, state changes,
+  properties, tags (with inheritance), raw text
+- Parent cache for 4x speedup on large files (eliminates O(n^2) bottleneck)
+- CLI for exploration (=python -m org_dex_parse=)
+- Comprehensive test suite (14 modules, 100+ tests)

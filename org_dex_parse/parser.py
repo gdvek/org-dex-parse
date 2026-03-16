@@ -13,19 +13,17 @@ import textwrap
 from typing import Any, Callable
 
 import orgparse
-import orgparse.node as _orgparse_node
 from orgparse.node import OrgEnv
 
 from .config import Config
 from orgparse.date import OrgDate
+from ._orgparse_compat import (
+    get_repeater, get_clock_duration, get_body_lines, apply_tag_patch,
+)
 
 from .types import (
     ClockEntry, Item, Link, ParseResult, Range, StateChange, Timestamp,
 )
-
-# Save the original tag regex at import time so we can restore it
-# when extra_tag_chars is not needed.  Used by the HACK(S04) monkey-patch.
-_ORIGINAL_RE_HEADING_TAGS = _orgparse_node.RE_HEADING_TAGS
 
 # -- Link extraction (S09a) ---------------------------------------------------
 
@@ -106,13 +104,14 @@ def _extract_links(text: str) -> tuple[Link, ...]:
 def _repeater_to_str(od: Any) -> str | None:
     """Extract the repeater cookie from an OrgDate as a string.
 
-    Accesses the private _repeater attribute — a 3-tuple (prefix, value, unit)
-    where prefix is '+', '++', or '.+', value is an int, and unit is a
-    single char ('d', 'w', 'm', 'y').  Returns e.g. '+1w', '++2d', '.+1m'.
+    Uses the adapter get_repeater (S20) which wraps the private _repeater
+    attribute — a 3-tuple (prefix, value, unit) where prefix is '+', '++',
+    or '.+', value is an int, and unit is a single char ('d', 'w', 'm', 'y').
+    Returns e.g. '+1w', '++2d', '.+1m'.
 
     Returns None when no repeater is present.  Protected by guard test AC10.
     """
-    rep = od._repeater
+    rep = get_repeater(od)
     if rep is None:
         return None
     prefix, value, unit = rep
@@ -153,7 +152,7 @@ def _orgdate_to_range(od: Any) -> Range:
 
 # -- Generic timestamp extraction (S09b-4) ------------------------------------
 
-# Drawer delimiters for LOGBOOK exclusion from _body_lines.
+# Drawer delimiters for LOGBOOK exclusion from body lines.
 # The LOGBOOK drawer contains structured logging data (CLOCK, state changes,
 # refile entries, capture entries, notes) — all with timestamps that must NOT
 # appear in generic timestamp fields.  We exclude the entire :LOGBOOK:...:END:
@@ -167,7 +166,7 @@ def _orgdate_to_range(od: Any) -> Range:
 #   1. Custom drawer name (org-log-into-drawer = a string, e.g. "CLOCKING")
 #      → logging data ends up in a drawer we don't filter.
 #   2. Inline logging (org-log-into-drawer = nil) → state changes, Refiled,
-#      Captured, Note entries stay in _body_lines unfiltered.
+#      Captured, Note entries stay in body lines unfiltered.
 # In both cases, logging timestamps would appear as false positives in
 # inactive_ts.  This is acceptable for now — the standard LOGBOOK covers
 # the common case.  If custom drawer support is needed, the natural evolution
@@ -197,7 +196,7 @@ def _collect_timestamps(
 
     For each node, extracts timestamps from two structured sources:
     1. node.heading — timestamps in the heading line
-    2. node._body_lines — body text with planning and PROPERTIES already
+    2. body lines (via adapter) — body text with planning and PROPERTIES already
        excluded by orgparse, further filtered to exclude the :LOGBOOK:
        drawer (CLOCK, state changes, refile, capture, note entries)
 
@@ -252,13 +251,13 @@ def _collect_timestamps_walk(
     for od in OrgDate.list_from_str(heading_text):
         _classify_orgdate(od, active, inactive, ranges)
 
-    # Source 2: _body_lines — planning and PROPERTIES already excluded
-    # by orgparse.  Exclude the entire :LOGBOOK: drawer (CLOCK, state
-    # changes, refile/capture/note entries — all logging data with
-    # timestamps that belong to dedicated fields, not generics).
+    # Source 2: body lines (via adapter, S20) — planning and PROPERTIES
+    # already excluded by orgparse.  Exclude the entire :LOGBOOK: drawer
+    # (CLOCK, state changes, refile/capture/note entries — all logging
+    # data with timestamps that belong to dedicated fields, not generics).
     body_lines: list[str] = []
     in_logbook = False
-    for line in node._body_lines:
+    for line in get_body_lines(node):
         if not in_logbook and _RE_LOGBOOK_START.match(line):
             in_logbook = True
             continue
@@ -376,16 +375,17 @@ def _collect_clock_walk(
 ) -> None:
     """Recursive walk for clock collection.
 
-    Converts each OrgDateClock to ClockEntry using _duration (private API,
-    guarded by test AC7).  _duration is int (minutes) on closed clocks,
-    None on open clocks.  The public .duration property computes a timedelta
-    from end-start and raises TypeError on open clocks — so we use _duration.
+    Converts each OrgDateClock to ClockEntry using get_clock_duration
+    (adapter, S20) which wraps the private _duration attribute.
+    Returns int (minutes) on closed clocks, None on open clocks.
+    The public .duration property raises TypeError on open clocks —
+    so we use the adapter.  Guarded by test AC7.
     """
     for cl in node.clock:
         entries.append(ClockEntry(
             start=cl.start,
             end=cl.end,
-            duration_minutes=cl._duration,
+            duration_minutes=get_clock_duration(cl),
         ))
 
     # Recurse into non-item children (scaffolding).
@@ -716,30 +716,6 @@ def _build_inherited_tags_map(
     return inherited
 
 
-def _apply_tag_monkey_patch(extra_tag_chars: str) -> None:
-    """Set or restore the orgparse tag regex based on extra_tag_chars.
-
-    HACK(S04): orgparse only accepts [a-zA-Z0-9_@] in tags (the org-mode
-    standard).  Workflows that use additional characters (e.g. % for
-    identity, # for entities) need an extended regex.
-
-    If extra_tag_chars is non-empty, we override orgparse._parser.RE_HEADING_TAGS
-    with a regex that includes the extra characters.  If empty, we restore
-    the original regex.  This is called at the start of every parse_file
-    to ensure idempotency across calls with different configs.
-
-    Why a monkey-patch: orgparse does not expose tag character configuration.
-    The proper fix is an upstream PR or a fork.
-
-    Limitation: not thread-safe — modifies a module-level global.
-    Acceptable for single-threaded use.
-    """
-    if extra_tag_chars:
-        _orgparse_node.RE_HEADING_TAGS = re.compile(
-            rf'(.*?)\s*:([\w@{re.escape(extra_tag_chars)}:]+):\s*$'
-        )
-    else:
-        _orgparse_node.RE_HEADING_TAGS = _ORIGINAL_RE_HEADING_TAGS
 
 
 def _collect_raw_text(
@@ -781,9 +757,9 @@ def parse_file(path: str, config: Config) -> ParseResult:
     # Normalize path to string for consistent file_path values.
     path_str = str(path)
 
-    # HACK(S04): apply or restore the tag monkey-patch before loading
-    # the file — orgparse parses tags during load().
-    _apply_tag_monkey_patch(config.extra_tag_chars)
+    # HACK(S04): apply or restore the tag monkey-patch (via adapter,
+    # S20) before loading the file — orgparse parses tags during load().
+    apply_tag_patch(config.extra_tag_chars)
 
     # Build OrgEnv so orgparse recognizes TODO/DONE keywords and
     # correctly strips them from node.heading.
@@ -895,7 +871,7 @@ def parse_file(path: str, config: Config) -> ParseResult:
 
             # -- Generic timestamps (S09b-4) --------------------------------
             # Walk the item subtree node-by-node, extracting from heading
-            # and filtered _body_lines.  Excludes planning, PROPERTIES,
+            # and filtered body lines.  Excludes planning, PROPERTIES,
             # CLOCK, and state-change lines.
             active_ts, inactive_ts, range_ts = _collect_timestamps(
                 node, predicate

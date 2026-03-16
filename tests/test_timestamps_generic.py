@@ -7,8 +7,6 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-import orgparse
-
 from org_dex_parse import Config, Item, ParseResult, Range, Timestamp, parse_file
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -220,32 +218,7 @@ class TestRangeStructure:
         assert items["gen-011"].range_ts[0].active is False
 
 
-# -- AC11: guard test for node._body_lines -----------------------------------
-
-class TestBodyLinesGuard:
-    """Guard test: verify orgparse internal _body_lines attribute.
-
-    _body_lines is a private API.  If orgparse changes the attribute
-    name or type, this test fails immediately — protecting the timestamp
-    extraction from silent breakage.
-    """
-
-    def test_body_lines_exists(self):
-        """AC11: OrgNode has _body_lines attribute."""
-        root = orgparse.load(str(TS_ORG))
-        # First real node (skip virtual root).
-        node = root[1]
-        assert hasattr(node, "_body_lines")
-
-    def test_body_lines_is_list_of_strings(self):
-        """AC11: _body_lines is a list of strings."""
-        root = orgparse.load(str(TS_ORG))
-        node = root[1]
-        lines = node._body_lines
-        assert isinstance(lines, list)
-        # If there are body lines, each must be a string.
-        for line in lines:
-            assert isinstance(line, str)
+# AC11 guard tests moved to test_orgparse_compat.py (S20).
 
 
 # -- AC12: empty tuples when no generic timestamps ----------------------------

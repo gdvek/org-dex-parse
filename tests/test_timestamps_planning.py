@@ -7,8 +7,6 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-from orgparse.date import OrgDate
-
 from org_dex_parse import Config, Item, ParseResult, Timestamp, parse_file
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -172,32 +170,4 @@ class TestRepeaterForms:
         assert items["ts-008"].scheduled.repeater == ".+1m"
 
 
-# -- AC10: guard test for OrgDate._repeater ----------------------------------
-
-class TestOrgDateRepeaterGuard:
-    """Guard test: verify orgparse internal _repeater format.
-
-    _repeater is a private API.  If orgparse changes the format,
-    this test fails immediately — protecting _repeater_to_str from
-    silent corruption.
-    """
-
-    def test_repeater_is_tuple_of_three(self):
-        """AC10: OrgDate._repeater is a 3-tuple (prefix, value, unit)."""
-        od = OrgDate.list_from_str("<2026-04-01 Wed +1w>")[0]
-        rep = od._repeater
-        assert isinstance(rep, tuple)
-        assert len(rep) == 3
-
-    def test_repeater_values(self):
-        """AC10: +1w → ('+', 1, 'w')."""
-        od = OrgDate.list_from_str("<2026-04-01 Wed +1w>")[0]
-        prefix, value, unit = od._repeater
-        assert prefix == "+"
-        assert value == 1
-        assert unit == "w"
-
-    def test_repeater_none_when_absent(self):
-        """AC10: no repeater → _repeater is None."""
-        od = OrgDate.list_from_str("<2026-04-01 Wed>")[0]
-        assert od._repeater is None
+# AC10 guard tests moved to test_orgparse_compat.py (S20).

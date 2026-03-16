@@ -621,7 +621,7 @@ policies and a configurable predicate.
    config files, CLI) and covers the common cases.  The =callable= form exists
    for backward compatibility and advanced use.
 
-** TODO and DONE keywords
+** \TODO and DONE keywords
    org-mode needs to know your TODO keywords to correctly parse headings.
    If you use custom keywords, pass them in =Config=:
 

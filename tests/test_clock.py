@@ -7,9 +7,6 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-import orgparse
-from orgparse.date import OrgDateClock
-
 from org_dex_parse import Config, Item, ParseResult, parse_file
 from org_dex_parse.types import ClockEntry
 
@@ -140,34 +137,7 @@ class TestNoClock:
         assert items["clk-004"].clock == ()
 
 
-# -- AC7: guard test for OrgDateClock._duration (private API) ---------------
-
-class TestGuardOrgDateClockDuration:
-    """Guard test: verify orgparse OrgDateClock._duration attribute.
-
-    _duration is a private API.  If orgparse changes the attribute name
-    or type, this test fails immediately — protecting clock extraction
-    from silent breakage.
-    """
-
-    def test_duration_is_int_on_closed(self):
-        """AC7: _duration is int (minutes) on closed clock."""
-        root = orgparse.load(str(CLK_ORG))
-        # clk-001 is the first real node — has closed clocks.
-        node = root[1]
-        assert len(node.clock) > 0
-        cl = node.clock[0]
-        assert isinstance(cl, OrgDateClock)
-        assert isinstance(cl._duration, int)
-
-    def test_duration_is_none_on_open(self):
-        """AC7: _duration is None on open clock."""
-        root = orgparse.load(str(CLK_ORG))
-        # clk-002 is the second real node — has open clock.
-        node = root[2]
-        assert len(node.clock) > 0
-        cl = node.clock[0]
-        assert cl._duration is None
+# AC7 guard tests moved to test_orgparse_compat.py (S20).
 
 
 # -- AC8: start and end are always datetime.datetime -----------------------

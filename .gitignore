@@ -11,6 +11,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 *.egg-info/
+dist/
 
 # Project docs (symlinks to org-dex-parse-project, tracked separately)
 project

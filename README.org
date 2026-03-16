@@ -1,8 +1,112 @@
 #+title: org-dex-parse
-#+author: Gabriele Della Vecchia
+#+author: gdvek
 
 Parse org-mode files into structured data.  Built for [[https://github.com/gdvek/org-dex][org-dex]], usable
 standalone.  Uses [[https://github.com/karlicoss/orgparse][orgparse]] as the parsing backend.
+
+org-dex-parse is a semantic layer on top of orgparse.  It walks the
+parsed tree, discriminates *items* (indexed entities) from
+*scaffolding* (organizational headings), and extracts 24 structured
+fields per item — timestamps, links, tags, clock entries, state
+changes, body text, and properties — using zone-aware extraction
+policies and a configurable predicate.
+
+* Why org-dex-parse
+  org-dex-parse adds domain logic on top of orgparse's syntax tree.
+  orgparse handles the org-mode grammar; org-dex-parse handles item
+  discrimination, field extraction, and content filtering.
+
+  #+begin_example
+                      org file
+                         |
+                      orgparse
+                    (syntax tree)
+                         |
+                   org-dex-parse
+                  (semantic layer)
+                         |
+                    Item stream
+                  (24-field frozen
+                   dataclasses)
+                         |
+          +--------------+--------------+
+          v              v              v
+     org-dex       custom indexers   data pipelines
+     (DB + UI)     (knowledge graphs)(analytics)
+  #+end_example
+
+  - *Configurable item definition* — an s-expression predicate
+    (JSON-serializable, cross-process) decides which =:ID:= headings
+    are items and which are scaffolding.  No code changes required.
+  - *Zone-aware extraction* — different exclusion policies for body,
+    links, and timestamps.  The =:LOGBOOK:= drawer is excluded from
+    body text but its clock entries and state changes are extracted by
+    dedicated handlers.  Custom drawers can be excluded from body while
+    their links are still captured.
+  - *Scaffolding roll-up* — headings without =:ID:= (or that fail the
+    predicate) are not discarded.  Their content — body, links,
+    timestamps, clock — rolls up into the nearest ancestor item.
+  - *24 structured fields per item* — planning timestamps, generic
+    timestamps (with deduplication), tag inheritance, parent tracking,
+    clock entries, state changes, links (org-mode and bare URLs),
+    filtered body, raw source text, and properties.
+  - *Immutable data* — all public types (=Item=, =Timestamp=, =Link=,
+    =ClockEntry=, =StateChange=, =Range=) are frozen dataclasses.
+
+* Design choices
+  - *orgparse does syntax, org-dex-parse does domain logic.*  The
+    parser does not re-implement the org-mode grammar — it delegates
+    low-level parsing to orgparse and focuses on item discrimination,
+    field extraction, and zone-aware filtering.
+  - *O(n) traversal.*  Parent lookup and tag inheritance are
+    pre-computed in a single tree walk, not recalculated per item.
+  - *Defensive dependency management.*  orgparse is pinned to
+    =>=0.4,<0.5=.  Four private API access points are guarded by
+    version-specific tests.
+  - *Tested on real data.*  221 tests passing.  Regression-tested
+    against 609 real-world items, fixing 16 classes of bugs found in
+    the predecessor parser.
+
+* Performance
+  Extraction profile on a real-world org archive (4,380 items, Linux, Python 3.11):
+
+  | Field          | Count |
+  |----------------+-------|
+  | title          |  4380 |
+  | item_id        |  4380 |
+  | level          |  4380 |
+  | linenumber     |  4380 |
+  | file_path      |  4380 |
+  | todo           |  4380 |
+  | priority       |  1442 |
+  | local_tags     |  4380 |
+  | inherited_tags |  4358 |
+  | parent_item_id |     0 |
+  | scheduled      |    40 |
+  | deadline       |     4 |
+  | closed         |  4369 |
+  | created        |     0 |
+  | archived       |  4380 |
+  | active_ts      |  2453 |
+  | inactive_ts    |   255 |
+  | range_ts       |  1874 |
+  | clock          |   251 |
+  | state_changes  |   872 |
+  | body           |  3124 |
+  | raw_text       |  4380 |
+  | links          | 10214 |
+  | properties     |  4755 |
+
+
+  |                 |         |
+  | File size       | 5.0 MB  |
+  | Lines           | 135,511 |
+  | Extraction time | 2.5 s   |
+
+  Breakdown: orgparse loads the syntax tree in ~1.5 s, org-dex-parse
+  walks the tree and extracts all fields in ~1.0 s.  The extraction
+  phase uses O(n) pre-computed caches for parent lookup and tag
+  inheritance.
 
 * Installation
 

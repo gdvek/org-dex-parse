@@ -256,3 +256,105 @@ def test_example_config_valid():
     }
     for key in data:
         assert key in valid_keys, f"unknown key {key!r} in example config"
+
+
+# -- S25: CLI input validation and normalization -------------------------------
+
+# AC1: CLI split strips whitespace and filters empty tokens.
+def test_cli_todos_strip_and_filter(tmp_path):
+    """S25-AC1: --todos 'TODO, NEXT,' strips spaces and drops empty tokens."""
+    org = _write_org(tmp_path, """\
+        * TODO First
+          :PROPERTIES:
+          :ID: id-s25-01
+          :END:
+        * NEXT Second
+          :PROPERTIES:
+          :ID: id-s25-02
+          :END:
+    """)
+    # Spaces around tokens and trailing comma — both should be handled.
+    result = _run_cli("--json", "--todos", "TODO, NEXT,", str(org))
+    data = json.loads(result.stdout)
+    todos = {item["item_id"]: item["todo"] for item in data}
+    # Both keywords recognized correctly (no " NEXT" with leading space).
+    assert todos["id-s25-01"] == "TODO"
+    assert todos["id-s25-02"] == "NEXT"
+
+
+# AC2: CLI frozenset split strips whitespace and filters empty tokens.
+# exclude_drawers is lowercased by Config.__post_init__, so we verify
+# the drawer content is excluded from body (end-to-end).
+def test_cli_exclude_drawers_strip_and_filter(tmp_path):
+    """S25-AC2: --exclude-drawers 'LOGBOOK, NOTES' strips and filters."""
+    org = _write_org(tmp_path, """\
+        * Item
+          :PROPERTIES:
+          :ID: id-s25-03
+          :END:
+          Visible body text.
+          :LOGBOOK:
+          logbook secret content
+          :END:
+          :NOTES:
+          notes secret content
+          :END:
+    """)
+    result = _run_cli(
+        "--json", "-v",
+        "--exclude-drawers", "LOGBOOK, NOTES,",
+        str(org),
+    )
+    data = json.loads(result.stdout)
+    assert len(data) == 1
+    body = data[0]["body"]
+    # Drawer content excluded despite spaces in CLI flag.
+    assert "logbook secret content" not in body
+    assert "notes secret content" not in body
+    assert "Visible body text." in body
+
+
+# AC3: JSON scalar where list expected → clear error.
+def test_config_json_scalar_todos_rejected(tmp_path, org_file):
+    """S25-AC3: JSON 'todos' as string instead of list → clear error."""
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"todos": "LOGBOOK"}))
+    result = _run_cli("--config", str(config), str(org_file), check=False)
+    assert result.returncode != 0
+    assert "todos" in result.stderr
+    assert "list" in result.stderr.lower()
+
+
+# AC4: JSON scalar where list expected for frozenset field → clear error.
+def test_config_json_scalar_exclude_drawers_rejected(tmp_path, org_file):
+    """S25-AC4: JSON 'exclude_drawers' as string → clear error."""
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"exclude_drawers": "LOGBOOK"}))
+    result = _run_cli("--config", str(config), str(org_file), check=False)
+    assert result.returncode != 0
+    assert "exclude_drawers" in result.stderr
+    assert "list" in result.stderr.lower()
+
+
+# AC5: JSON with correct types continues to work.
+def test_config_json_correct_types(tmp_path):
+    """S25-AC5: JSON config with all list fields as lists works fine."""
+    org = _write_org(tmp_path, """\
+        * TODO Item
+          :PROPERTIES:
+          :ID: id-s25-05
+          :END:
+    """)
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({
+        "todos": ["TODO"],
+        "dones": ["DONE"],
+        "exclude_drawers": ["LOGBOOK"],
+        "exclude_blocks": ["src"],
+        "exclude_properties": ["CREATED"],
+        "tags_exclude_from_inheritance": ["noexport"],
+    }))
+    result = _run_cli("--json", "--config", str(config), str(org))
+    data = json.loads(result.stdout)
+    assert len(data) == 1
+    assert data[0]["todo"] == "TODO"

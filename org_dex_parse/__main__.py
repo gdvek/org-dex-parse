@@ -36,6 +36,20 @@ _VALID_CONFIG_KEYS = frozenset({
     "created_property", "extra_tag_chars",
 })
 
+# Expected JSON types for each config field.  Used to reject scalars
+# where a list is expected (e.g. "todos": "LOGBOOK" instead of ["LOGBOOK"]).
+_CONFIG_EXPECTED_TYPES: dict[str, type | tuple[type, ...]] = {
+    "todos": list,
+    "dones": list,
+    "tags_exclude_from_inheritance": list,
+    "exclude_drawers": list,
+    "exclude_blocks": list,
+    "exclude_properties": list,
+    "predicate": (list, type(None)),
+    "created_property": str,
+    "extra_tag_chars": str,
+}
+
 
 def _load_config_file(path: str) -> dict:
     """Load and validate a JSON config file.
@@ -61,6 +75,22 @@ def _load_config_file(path: str) -> dict:
               file=sys.stderr)
         raise SystemExit(1)
 
+    # Validate value types — reject scalars where lists are expected.
+    for key, value in data.items():
+        expected = _CONFIG_EXPECTED_TYPES.get(key)
+        if expected is not None and not isinstance(value, expected):
+            # Human-readable expected type name.
+            if isinstance(expected, tuple):
+                names = " or ".join(t.__name__ for t in expected)
+            else:
+                names = expected.__name__
+            print(
+                f"error: config field \"{key}\" must be {names}, "
+                f"got {type(value).__name__}: {value!r}",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+
     return data
 
 
@@ -79,8 +109,14 @@ def _build_config(args: argparse.Namespace) -> Config:
     # Map CLI flag names to config dict keys.
     # Each entry: (argparse dest, config key, transform).
     # transform converts the CLI string to the config value type.
-    _split = lambda s: tuple(s.split(",")) if s else ()
-    _split_frozen = lambda s: frozenset(s.split(",")) if s else frozenset()
+    # Strip whitespace around each token and drop empty strings.
+    # Without this, "--todos 'TODO, NEXT,'" would produce (" NEXT", "").
+    _split = lambda s: tuple(
+        t for t in (x.strip() for x in s.split(",")) if t
+    ) if s else ()
+    _split_frozen = lambda s: frozenset(
+        t for t in (x.strip() for x in s.split(",")) if t
+    ) if s else frozenset()
 
     cli_mappings = [
         ("predicate", "predicate", lambda s: json.loads(s)),

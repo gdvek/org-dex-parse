@@ -9,6 +9,12 @@ Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
 
 Initial release.
 
+** Fixed
+- CLI: =--todos "TODO, NEXT,"= now strips whitespace and drops empty tokens
+  (previously produced =" NEXT"= and =""=)
+- CLI: JSON config with scalar where list expected (e.g. ="todos": "LOGBOOK"=)
+  now fails with a clear error instead of silently iterating the string
+
 ** Added
 - Parse org-mode files into structured =Item= dataclasses (24 fields)
 - Configurable item predicate via s-expression evaluator

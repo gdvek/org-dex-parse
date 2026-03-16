@@ -845,10 +845,12 @@ backend.
    text from the ciphertext.
 
 ** orgparse private API dependency
-   The parser accesses 4 private attributes of orgparse (=_repeater=,
-   =_duration=, =_body_lines=, =RE_HEADING_TAGS=).  These are protected by
-   guard tests and a version pin (=orgparse>=0.4,<0.5=), but may break if
-   orgparse changes its internals within the pinned range.
+   The parser depends on 4 private attributes of orgparse (=_repeater=,
+   =_duration=, =_body_lines=, =RE_HEADING_TAGS=).  All access is isolated in
+   an adapter module (=_orgparse_compat.py=) — the rest of the codebase never
+   touches orgparse internals directly.  The attributes are protected by guard
+   tests and a version pin (=orgparse>=0.4,<0.5=), but may break if orgparse
+   changes its internals within the pinned range.
 
 * Development
   #+begin_src sh

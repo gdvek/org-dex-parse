@@ -63,7 +63,7 @@ policies and a configurable predicate.
   - *Defensive dependency management.*  orgparse is pinned to
     =>=0.4,<0.5=.  Four private API access points are guarded by
     version-specific tests.
-  - *Tested on real data.*  221 tests passing.  Regression-tested
+  - *Tested on real data.*  273 tests passing.  Regression-tested
     against 609 real-world items, fixing 16 classes of bugs found in
     the predecessor parser.
 
@@ -722,22 +722,41 @@ policies and a configurable predicate.
 
 * CLI
 
-  A development/exploration CLI is included:
+  A CLI is included for exploration and scripting:
 
   #+begin_src sh
-  # Bare config (any heading with :ID:)
-  python -m org_dex_parse --bare file.org
+  # Default: any heading with :ID: is an item
+  python -m org_dex_parse file.org
 
   # With a predicate
   python -m org_dex_parse --predicate '["property", "Type"]' file.org
 
-  # Verbose (show raw_text preview)
-  python -m org_dex_parse --bare -v file.org
+  # With TODO keywords
+  python -m org_dex_parse --todos TODO,NEXT,DOING --dones DONE,CANCELED file.org
+
+  # From a config file (all fields optional)
+  python -m org_dex_parse --config myconfig.json file.org
+
+  # JSON output
+  python -m org_dex_parse --json file.org
+
+  # Verbosity: -v adds body, -vv adds raw_text
+  python -m org_dex_parse -v file.org
+  python -m org_dex_parse --json -vv file.org
   #+end_src
 
-  Note: without =--bare= or =--predicate=, the CLI uses a built-in
-  configuration specific to the author's workflow.  Use =--bare= for a
-  neutral default, or =--predicate= for your own item definition.
+  All =Config= fields are available as CLI flags.  Run
+  =python -m org_dex_parse --help= for the full list.
+
+  An example config file is included in =examples/config.json= — it
+  documents all available fields and can be used directly:
+
+  #+begin_src sh
+  python -m org_dex_parse --config examples/config.json file.org
+  #+end_src
+
+  *Precedence:* CLI flags override config file values, which override
+  defaults.
 
 * Assumptions and requirements
   The parser makes the following assumptions about the org files it

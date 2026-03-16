@@ -1,103 +1,176 @@
-"""CLI for quick exploration: python -m org_dex_parse FILE [FILE ...]
+"""CLI for org-dex-parse: python -m org_dex_parse FILE [FILE ...]
 
 Parses org files and prints each item with its populated fields.
-Uses the Remi workflow configuration by default.
+Uses bare configuration by default (any heading with :ID: is an item).
 
 Usage:
-    python -m org_dex_parse ~/Remi/REMI/remi.org
-    python -m org_dex_parse -v ~/Remi/ROAM/*.org
-    python -m org_dex_parse --bare ~/org/plain.org   # no Remi config
+    python -m org_dex_parse file.org
+    python -m org_dex_parse --json file.org
+    python -m org_dex_parse --config myconfig.json file.org
     python -m org_dex_parse --predicate '["property", "Type"]' file.org
+    python -m org_dex_parse --todos TODO,NEXT --dones DONE file.org
+    python -m org_dex_parse --json -vv file.org   # full output with raw_text
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import datetime
 import json
+import sys
+from pathlib import Path
 
 from .config import Config
 from .parser import parse_file
 
 
-# -- Remi workflow configuration ----------------------------------------------
-# Hardcoded from remi-init.org / org-init.org.  Matches the remi-org-db
-# pipeline so the CLI output is identical to what the real system sees.
+# -- Config construction -------------------------------------------------------
+# Builds a Config from CLI flags and optional JSON config file.
+# Precedence: CLI flags > config file > Config defaults.
 
-_REMI_TODOS = (
-    "PLANNING", "TODO", "NEXT", "DOING", "TESTING",
-    "PAUSED", "WAITING", "HOLD", "IDLE", "RESTART",
-    "PERIPHERY", "FOREGROUND", "TIMELESS",
-    "TODISCOVER", "BLOCKED", "TOANALYZE", "TOSYNTHESIZE",
-    "DISCOVERING", "ANALYZING", "SYNTHESIZING",
-    "MTODO", "MNEXT", "MASTERING", "HIBERNATED",
-    "MPAUSED", "MHOLD", "MRESTART",
-    "FAILED", "SUCCESS",
-    "REPEAT", "SYNC", "MISSED", "STANDBY",
-    "EASY", "MEDIUM", "HARD", "IMPOSSIBLE",
-    "NEW",
-    "DRAFT", "REFINING", "FINAL", "VALIDATED",
-    "TOUPDATE", "UPDATING",
-    "TOREVIEW", "REVIEWING", "OUTDATED", "EXCLUDED",
-    "SKIPPED",
-    "ARCHIVED",
-)
-
-_REMI_DONES = (
-    "DONE", "CANCELED",
-    "CONSUMED",
-    "DISCOVERED", "ANALYZED", "SYNTHESIZED",
-    "MASTERED",
-    "CHECKED",
-    "COMPLETED",
-    "JUNK",
-)
-
-_REMI_TAGS_EXCLUDE = frozenset({
-    "today", "week", "sprint", "side", "quarter", "someday", "next",
-    "roam", "focus", "pin", "star", "fav", "_sf", "_era", "exercise",
-    "kata", "sub", "principle", "pattern", "abc", "regression", "fault",
-    "habit", "suspended", "_ext", "_bur", "fcreset", "fcnow", "new",
-    "fczoom", "fcedit", "fcpractice", "failed", "edited", "_iw", "_ir",
-    "_iwatch", "_feynman", "_bg", "_shadowing", "fc_r", "now", "main",
-    "mit", "idle", "exempt", "expired", "sync", "core", "slack", "drill",
-    "work", "mvmnt", "pause", "other", "_exp", "_feed", "_mntrng",
-    "_low", "_medium", "_high", "_peak", "_plan", "_execute", "_review",
-    "_research", "_shallow", "_deep", "_immerse", "_distill", "_embody",
-    "_integrate", "_maintain", "_reg", "_acc", "_trk", "_bra", "_lf",
-    "_grf", "_schema", "_unapproved", "_new", "_valid", "_doubt",
-    "_untrusted", "_excluded", "staged",
+# Valid keys in the JSON config file — must match Config fields.
+# Used to reject typos early (AC11).
+_VALID_CONFIG_KEYS = frozenset({
+    "predicate", "todos", "dones", "tags_exclude_from_inheritance",
+    "exclude_drawers", "exclude_blocks", "exclude_properties",
+    "created_property", "extra_tag_chars",
 })
 
-_REMI_EXCLUDE_DRAWERS = frozenset({
-    "logbook", "see_also", "unapproved", "help", "image",
-    "___links_to___", "___linked_by___", "___parents___", "___children___",
-})
 
-_REMI_EXCLUDE_PROPERTIES = frozenset({
-    "archive_file", "archive_category", "archive_todo", "archive_itags",
-    "archive_olpath", "archive_ltags", "last_interaction", "remiauto_tags",
-})
+def _load_config_file(path: str) -> dict:
+    """Load and validate a JSON config file.
 
-_REMI_EXTRA_TAG_CHARS = "%#"
+    Returns a dict with only known keys.  Raises SystemExit on
+    unknown keys or missing file (with clear error messages).
+    """
+    try:
+        text = Path(path).read_text()
+    except FileNotFoundError:
+        print(f"error: config file not found: {path}", file=sys.stderr)
+        raise SystemExit(1)
 
-# Remi predicate: a heading is an item only if it has a :Type: property.
-# The :ID: check is the structural invariant applied before the predicate.
-_REMI_PREDICATE = lambda h: h.get_property("Type") is not None
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        print(f"error: config file must be a JSON object, got {type(data).__name__}",
+              file=sys.stderr)
+        raise SystemExit(1)
 
-REMI_CONFIG = Config(
-    item_predicate=_REMI_PREDICATE,
-    todos=_REMI_TODOS,
-    dones=_REMI_DONES,
-    tags_exclude_from_inheritance=_REMI_TAGS_EXCLUDE,
-    exclude_drawers=_REMI_EXCLUDE_DRAWERS,
-    exclude_properties=_REMI_EXCLUDE_PROPERTIES,
-    extra_tag_chars=_REMI_EXTRA_TAG_CHARS,
-)
+    unknown = set(data.keys()) - _VALID_CONFIG_KEYS
+    if unknown:
+        print(f"error: unknown fields in config file: {', '.join(sorted(unknown))}",
+              file=sys.stderr)
+        raise SystemExit(1)
+
+    return data
 
 
-# -- Output -------------------------------------------------------------------
+def _build_config(args: argparse.Namespace) -> Config:
+    """Build a Config from CLI args, merging config file if present.
 
-def _print_item(item, verbose: bool) -> None:
-    """Print a single item."""
+    Precedence: CLI flags > config file > Config defaults.
+    A CLI flag is considered "set" when its value differs from None
+    (argparse default for all our optional flags).
+    """
+    # Start with config file values (if any).
+    file_cfg: dict = {}
+    if args.config is not None:
+        file_cfg = _load_config_file(args.config)
+
+    # Map CLI flag names to config dict keys.
+    # Each entry: (argparse dest, config key, transform).
+    # transform converts the CLI string to the config value type.
+    _split = lambda s: tuple(s.split(",")) if s else ()
+    _split_frozen = lambda s: frozenset(s.split(",")) if s else frozenset()
+
+    cli_mappings = [
+        ("predicate", "predicate", lambda s: json.loads(s)),
+        ("todos", "todos", _split),
+        ("dones", "dones", _split),
+        ("tags_exclude", "tags_exclude_from_inheritance", _split_frozen),
+        ("exclude_drawers", "exclude_drawers", _split_frozen),
+        ("exclude_blocks", "exclude_blocks", _split_frozen),
+        ("exclude_properties", "exclude_properties", _split_frozen),
+        ("created_property", "created_property", lambda s: s),
+        ("extra_tag_chars", "extra_tag_chars", lambda s: s),
+    ]
+
+    # Merge: CLI flags override config file.
+    merged: dict = {}
+    for arg_name, cfg_key, transform in cli_mappings:
+        cli_val = getattr(args, arg_name, None)
+        if cli_val is not None:
+            # CLI flag was explicitly set — it wins.
+            merged[cfg_key] = transform(cli_val)
+        elif cfg_key in file_cfg:
+            # Config file has this key — use it.
+            merged[cfg_key] = file_cfg[cfg_key]
+        # else: use Config default (don't set in merged).
+
+    # Convert config file types to Config constructor types.
+    # JSON arrays → tuples/frozensets as needed.
+    if "todos" in merged and isinstance(merged["todos"], list):
+        merged["todos"] = tuple(merged["todos"])
+    if "dones" in merged and isinstance(merged["dones"], list):
+        merged["dones"] = tuple(merged["dones"])
+    for set_key in ("tags_exclude_from_inheritance", "exclude_drawers",
+                     "exclude_blocks", "exclude_properties"):
+        if set_key in merged and isinstance(merged[set_key], list):
+            merged[set_key] = frozenset(merged[set_key])
+
+    # predicate: list or None passed directly to Config (compiled in
+    # __post_init__).  "null" on CLI becomes None via json.loads.
+    if "predicate" in merged:
+        merged["item_predicate"] = merged.pop("predicate")
+
+    return Config(**merged)
+
+
+# -- JSON serialization --------------------------------------------------------
+# Custom encoder for Item dataclasses and org-dex-parse types.
+
+class _ItemEncoder(json.JSONEncoder):
+    """JSON encoder for Item and its nested types."""
+
+    def default(self, obj):
+        # date/datetime → ISO string.
+        if isinstance(obj, datetime.datetime):
+            return obj.isoformat()
+        if isinstance(obj, datetime.date):
+            return obj.isoformat()
+        # frozenset → sorted list.
+        if isinstance(obj, frozenset):
+            return sorted(obj)
+        return super().default(obj)
+
+
+def _item_to_dict(item, verbosity: int) -> dict:
+    """Convert an Item to a JSON-friendly dict.
+
+    Verbosity controls which fields are included:
+    - 0 (default): all fields except body and raw_text
+    - 1 (-v): adds body
+    - 2 (-vv): adds body and raw_text
+
+    Properties tuple-of-tuples is converted to a dict for readability.
+    """
+    d = dataclasses.asdict(item)
+
+    # Properties: tuple-of-tuples → dict.
+    d["properties"] = dict(d["properties"])
+
+    # Verbosity filtering.
+    if verbosity < 2:
+        d.pop("raw_text", None)
+    if verbosity < 1:
+        d.pop("body", None)
+
+    return d
+
+
+# -- Text output ---------------------------------------------------------------
+
+def _print_item(item, verbosity: int) -> None:
+    """Print a single item in human-readable text format."""
     print(f"  {item.title}")
     print(f"    id={item.item_id}  level={item.level}  line={item.linenumber}")
 
@@ -117,7 +190,16 @@ def _print_item(item, verbose: bool) -> None:
     if item.properties:
         print(f"    properties={dict(item.properties)}")
 
-    if verbose and item.raw_text:
+    # -v: show body.
+    if verbosity >= 1 and item.body:
+        lines = item.body.split("\n")
+        preview = lines[0][:80]
+        if len(lines) > 1:
+            preview += f"  ... ({len(lines)} lines)"
+        print(f"    body: {preview}")
+
+    # -vv: show raw_text.
+    if verbosity >= 2 and item.raw_text:
         lines = item.raw_text.split("\n")
         preview = lines[0][:80]
         if len(lines) > 1:
@@ -125,39 +207,87 @@ def _print_item(item, verbose: bool) -> None:
         print(f"    raw_text: {preview}")
 
 
+# -- Main ----------------------------------------------------------------------
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="python -m org_dex_parse",
-        description="Parse org files and show items (Remi config by default).",
+        description="Parse org files and show items (bare config by default).",
     )
     parser.add_argument("files", nargs="+", help="Org files to parse")
+
+    # Configuration flags — all optional, override config file values.
     parser.add_argument(
-        "--bare", action="store_true",
-        help="Use bare config (no keywords, no exclusions)",
+        "--config", type=str, default=None, metavar="FILE",
+        help="JSON config file (all fields optional)",
     )
     parser.add_argument(
         "--predicate", type=str, default=None,
         help='JSON s-expression predicate, e.g. \'["property", "Type"]\'',
     )
-    parser.add_argument("-v", "--verbose", action="store_true",
-                        help="Show raw_text preview")
+    parser.add_argument(
+        "--todos", type=str, default=None,
+        help="Comma-separated active TODO keywords",
+    )
+    parser.add_argument(
+        "--dones", type=str, default=None,
+        help="Comma-separated done TODO keywords",
+    )
+    parser.add_argument(
+        "--tags-exclude", type=str, default=None, dest="tags_exclude",
+        help="Comma-separated tags excluded from inheritance",
+    )
+    parser.add_argument(
+        "--exclude-drawers", type=str, default=None, dest="exclude_drawers",
+        help="Comma-separated drawer names to exclude from body",
+    )
+    parser.add_argument(
+        "--exclude-blocks", type=str, default=None, dest="exclude_blocks",
+        help="Comma-separated block names to exclude from body",
+    )
+    parser.add_argument(
+        "--exclude-properties", type=str, default=None, dest="exclude_properties",
+        help="Comma-separated property names to exclude",
+    )
+    parser.add_argument(
+        "--created-property", type=str, default=None, dest="created_property",
+        help="Property name for creation date (default: CREATED)",
+    )
+    parser.add_argument(
+        "--extra-tag-chars", type=str, default=None, dest="extra_tag_chars",
+        help="Additional characters allowed in tag names",
+    )
+
+    # Output flags.
+    parser.add_argument(
+        "--json", action="store_true", dest="json_output",
+        help="Output items as JSON",
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="count", default=0,
+        help="Increase verbosity: -v adds body, -vv adds raw_text",
+    )
 
     args = parser.parse_args()
+    config = _build_config(args)
 
-    if args.predicate is not None:
-        # --predicate overrides --bare / Remi default.
-        pred_expr = json.loads(args.predicate)
-        config = Config(item_predicate=pred_expr)
-    elif args.bare:
-        config = Config()
+    if args.json_output:
+        # JSON mode: collect all items across files, output as one array.
+        all_items = []
+        for path in args.files:
+            result = parse_file(path, config)
+            all_items.extend(
+                _item_to_dict(item, args.verbose) for item in result.items
+            )
+        print(json.dumps(all_items, cls=_ItemEncoder, indent=2,
+                         ensure_ascii=False))
     else:
-        config = REMI_CONFIG
-
-    for path in args.files:
-        result = parse_file(path, config)
-        print(f"\n{path}: {len(result.items)} items")
-        for item in result.items:
-            _print_item(item, args.verbose)
+        # Text mode: print per-file summary.
+        for path in args.files:
+            result = parse_file(path, config)
+            print(f"\n{path}: {len(result.items)} items")
+            for item in result.items:
+                _print_item(item, args.verbose)
 
 
 if __name__ == "__main__":

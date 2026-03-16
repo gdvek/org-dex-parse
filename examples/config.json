@@ -1,0 +1,11 @@
+{
+  "predicate": ["property", "Type"],
+  "todos": ["TODO", "NEXT", "DOING", "WAITING"],
+  "dones": ["DONE", "CANCELED"],
+  "tags_exclude_from_inheritance": [],
+  "exclude_drawers": ["logbook"],
+  "exclude_blocks": [],
+  "exclude_properties": [],
+  "created_property": "CREATED",
+  "extra_tag_chars": ""
+}

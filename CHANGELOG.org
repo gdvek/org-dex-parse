@@ -5,7 +5,7 @@ All notable changes to org-dex-parse are documented in this file.
 Format follows [[https://keepachangelog.com/en/1.1.0/][Keep a Changelog]].
 Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
 
-* [0.1.1] — 2026-03-16
+* [0.1.2] — 2026-03-17
 
 ** Fixed
 - Timestamp property robustness: impossible dates (e.g. Feb 31) in =CREATED=
@@ -18,19 +18,23 @@ Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
 - Clock ordering: =Item.clock= now sorts by start time, guaranteeing
   chronological order even when clock entries are interleaved across
   the item node and its scaffolding children
-- Bare URL trailing dot: =https://example.com/page.= in prose now strips
-  the final period (previously included it in the link target)
 - Bare URL balanced parentheses: URLs like
   =https://en.wikipedia.org/wiki/Foo_(bar)= are now preserved intact
   (previously the closing paren was stripped, breaking the link)
-- CLI: =--todos "TODO, NEXT,"= now strips whitespace and drops empty tokens
-  (previously produced =" NEXT"= and =""=)
-- CLI: JSON config with scalar where list expected (e.g. ="todos": "LOGBOOK"=)
-  now fails with a clear error instead of silently iterating the string
 - CLI: malformed JSON in config file now produces a user-friendly error
   instead of a Python traceback
 - CLI: malformed =--predicate= JSON and invalid predicate expressions now
   produce a clear error instead of a Python traceback
+
+* [0.1.1] — 2026-03-16
+
+** Fixed
+- Bare URL trailing dot: =https://example.com/page.= in prose now strips
+  the final period (previously included it in the link target)
+- CLI: =--todos "TODO, NEXT,"= now strips whitespace and drops empty tokens
+  (previously produced =" NEXT"= and =""=)
+- CLI: JSON config with scalar where list expected (e.g. ="todos": "LOGBOOK"=)
+  now fails with a clear error instead of silently iterating the string
 
 ** Changed
 - CLI rewritten as generic public tool (=python -m org_dex_parse=)

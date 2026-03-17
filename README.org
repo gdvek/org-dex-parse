@@ -820,11 +820,6 @@ backend.
    threads with different =extra_tag_chars= values.  Single-threaded use
    (including sequential calls with different configs) is safe.
 
-** Date validation on timestamp properties
-   A syntactically valid but impossible date in a property value (e.g.
-   =2026-02-31=) will raise a =ValueError= instead of degrading gracefully
-   to =None=.  This affects =created= and =archived= fields.
-
 ** COMMENT keyword not handled
    org-mode treats headings starting with =COMMENT= as excluded from
    export.  The parser does not recognize =COMMENT= as a special keyword —

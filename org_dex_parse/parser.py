@@ -802,177 +802,184 @@ def parse_file(path: str, config: Config) -> ParseResult:
 
     # HACK(S04): apply or restore the tag monkey-patch (via adapter,
     # S20) before loading the file — orgparse parses tags during load().
+    # S16: try/finally guarantees the original regex is restored even
+    # if orgparse.load() or any later step raises — prevents a failed
+    # parse from contaminating subsequent calls in the same process.
     apply_tag_patch(config.extra_tag_chars)
+    try:
 
-    # Build OrgEnv so orgparse recognizes TODO/DONE keywords and
-    # correctly strips them from node.heading.
-    # Pass todos/dones as lists.  Empty list means "no keywords" —
-    # orgparse treats None as "use defaults ['TODO']/['DONE']", which
-    # is not what we want when the consumer explicitly passes nothing.
-    env = OrgEnv(
-        todos=list(config.todos),
-        dones=list(config.dones),
-        filename=path_str,
-    )
+        # Build OrgEnv so orgparse recognizes TODO/DONE keywords and
+        # correctly strips them from node.heading.
+        # Pass todos/dones as lists.  Empty list means "no keywords" —
+        # orgparse treats None as "use defaults ['TODO']/['DONE']", which
+        # is not what we want when the consumer explicitly passes nothing.
+        env = OrgEnv(
+            todos=list(config.todos),
+            dones=list(config.dones),
+            filename=path_str,
+        )
 
-    root = orgparse.load(path_str, env=env)
+        root = orgparse.load(path_str, env=env)
 
-    predicate = config.item_predicate
+        predicate = config.item_predicate
 
-    # Property names always excluded from Item.properties.
-    # ID → already in item_id; ARCHIVE_TIME → archived;
-    # created_property → future created.  All compared lowercase.
-    always_excluded_props = {
-        "id", "archive_time", config.created_property.lower()
-    }
-    excluded_props = always_excluded_props | config.exclude_properties
+        # Property names always excluded from Item.properties.
+        # ID → already in item_id; ARCHIVE_TIME → archived;
+        # created_property → future created.  All compared lowercase.
+        always_excluded_props = {
+            "id", "archive_time", config.created_property.lower()
+        }
+        excluded_props = always_excluded_props | config.exclude_properties
 
-    # S11: pre-compute parent pointers and inherited tags in O(n).
-    # orgparse's node.parent does an O(n) backward scan per access,
-    # causing O(n²) total when called per item.  These caches make
-    # parent lookup and tag inheritance O(1) per node.
-    parent_map = _build_parent_map(root)
-    inherited_tags_map = _build_inherited_tags_map(root)
+        # S11: pre-compute parent pointers and inherited tags in O(n).
+        # orgparse's node.parent does an O(n) backward scan per access,
+        # causing O(n²) total when called per item.  These caches make
+        # parent lookup and tag inheritance O(1) per node.
+        parent_map = _build_parent_map(root)
+        inherited_tags_map = _build_inherited_tags_map(root)
 
-    # S29: pre-compute the item/scaffolding decision for every node.
-    # The predicate is called exactly once per node (those with :ID:).
-    # All walks use item_map for O(1) lookup instead of re-evaluating.
-    item_map = _build_item_map(root, predicate)
+        # S29: pre-compute the item/scaffolding decision for every node.
+        # The predicate is called exactly once per node (those with :ID:).
+        # All walks use item_map for O(1) lookup instead of re-evaluating.
+        item_map = _build_item_map(root, predicate)
 
-    items: list[Item] = []
+        items: list[Item] = []
 
-    # root[1:] iterates ALL nodes in document order, skipping the
-    # virtual root.  No recursion needed — orgparse provides a flat
-    # iterator over the entire tree.
-    for node in root[1:]:
-        if item_map.get(id(node), False):
-            # -- Properties (AC1–AC6) ----------------------------------------
-            # node.properties is the direct PROPERTIES drawer only (no
-            # subtree) — this prevents F-PR1 (subtree leakage) by design.
-            # str(v) preserves values as-is — prevents F-PR2 (effort
-            # normalization).
-            props = tuple(
-                (k, str(v))
-                for k, v in node.properties.items()
-                if k.lower() not in excluded_props
-            )
-
-            # -- Tags (AC7–AC9) ----------------------------------------------
-            # Filter empty strings before classification (fix F-TG1:
-            # malformed headings like '::' produce empty-string tags).
-            # S11: use pre-computed inherited_tags_map instead of
-            # node.tags (which triggers O(n) _find_parent per level).
-            raw_local = frozenset(t for t in node.shallow_tags if t)
-            ancestor_tags = inherited_tags_map.get(id(node), frozenset())
-            inherited = frozenset(
-                ancestor_tags - raw_local
-                - config.tags_exclude_from_inheritance
-            )
-
-            # -- TODO and priority (AC12–AC13) --------------------------------
-            # node.todo is "" when absent — normalize to None.
-            # node.priority is already None when absent.
-            todo = node.todo if node.todo else None
-            priority = node.priority
-
-            # -- Planning timestamps (S09b-1) ---------------------------------
-            # node.scheduled/deadline/closed return OrgDate objects that are
-            # falsy when absent (od.start is None), not Python None.
-            # All three wrapped in Timestamp for consistency (remi-org-parse
-            # had closed as bare datetime — we normalize).
-            scheduled = (
-                _orgdate_to_timestamp(node.scheduled)
-                if node.scheduled else None
-            )
-            deadline = (
-                _orgdate_to_timestamp(node.deadline)
-                if node.deadline else None
-            )
-            closed = (
-                _orgdate_to_timestamp(node.closed)
-                if node.closed else None
-            )
-
-            # -- Created timestamp (S09b-2) ------------------------------------
-            # Read from the configurable property (default "CREATED").
-            # node.get_property accesses only the direct PROPERTIES drawer,
-            # not children — same mechanism as :ID: and :Type:.
-            created_raw = node.get_property(config.created_property)
-            created = (
-                _parse_timestamp_property(created_raw)
-                if created_raw else None
-            )
-
-            # -- Archived timestamp (S09b-3) ----------------------------------
-            # ARCHIVE_TIME is written by org-archive-subtree in bare format
-            # (no delimiters).  _parse_timestamp_property handles bare → active=False.
-            archive_raw = node.get_property("ARCHIVE_TIME")
-            archived = (
-                _parse_timestamp_property(archive_raw)
-                if archive_raw else None
-            )
-
-            # -- Raw text and links (S06, S09a) --------------------------------
-            # Collect raw_text first, then extract links from it.
-            # Links operate on raw_text (no zone exclusion) — fix F-LK1.
-            raw_text = _collect_raw_text(node, item_map)
-
-            # -- Generic timestamps (S09b-4) --------------------------------
-            # Walk the item subtree node-by-node, extracting from heading
-            # and filtered body lines.  Excludes planning, PROPERTIES,
-            # CLOCK, and state-change lines.
-            active_ts, inactive_ts, range_ts = _collect_timestamps(
-                node, item_map
-            )
-
-            # -- Clock entries (S09c-1) ------------------------------------
-            # Walk scaffolding to collect CLOCK entries from item scope.
-            # Uses orgparse's structured node.clock API — no regex.
-            clock = _collect_clock(node, item_map)
-
-            # -- State changes (S09c-2) ------------------------------------
-            # Extract from str(node) only — no walk scaffolding.
-            # State changes are the history of this heading's keyword,
-            # not of its children (unlike clock which aggregates time).
-            state_changes = _extract_state_changes(str(node))
-
-            # -- Body text (S09d) ------------------------------------------
-            # Collect body from item scope (walk scaffolding).  Plain
-            # format: link syntax resolved, other markup preserved.
-            # Excluded: LOGBOOK (hardcoded), config drawers/blocks.
-            body = _collect_body(
-                node, item_map,
-                config.exclude_drawers, config.exclude_blocks,
-            )
-
-            items.append(
-                Item(
-                    title=node.heading,
-                    item_id=node.get_property("ID"),
-                    level=node.level,
-                    parent_item_id=_find_parent_id(node, item_map,
-                                                     parent_map),
-                    linenumber=node.linenumber,
-                    file_path=path_str,
-                    scheduled=scheduled,
-                    deadline=deadline,
-                    closed=closed,
-                    created=created,
-                    archived=archived,
-                    active_ts=active_ts,
-                    inactive_ts=inactive_ts,
-                    range_ts=range_ts,
-                    clock=clock,
-                    state_changes=state_changes,
-                    body=body,
-                    raw_text=raw_text,
-                    links=_extract_links(raw_text),
-                    properties=props,
-                    local_tags=raw_local,
-                    inherited_tags=inherited,
-                    todo=todo,
-                    priority=priority,
+        # root[1:] iterates ALL nodes in document order, skipping the
+        # virtual root.  No recursion needed — orgparse provides a flat
+        # iterator over the entire tree.
+        for node in root[1:]:
+            if item_map.get(id(node), False):
+                # -- Properties (AC1–AC6) ----------------------------------------
+                # node.properties is the direct PROPERTIES drawer only (no
+                # subtree) — this prevents F-PR1 (subtree leakage) by design.
+                # str(v) preserves values as-is — prevents F-PR2 (effort
+                # normalization).
+                props = tuple(
+                    (k, str(v))
+                    for k, v in node.properties.items()
+                    if k.lower() not in excluded_props
                 )
-            )
 
-    return ParseResult(items=tuple(items))
+                # -- Tags (AC7–AC9) ----------------------------------------------
+                # Filter empty strings before classification (fix F-TG1:
+                # malformed headings like '::' produce empty-string tags).
+                # S11: use pre-computed inherited_tags_map instead of
+                # node.tags (which triggers O(n) _find_parent per level).
+                raw_local = frozenset(t for t in node.shallow_tags if t)
+                ancestor_tags = inherited_tags_map.get(id(node), frozenset())
+                inherited = frozenset(
+                    ancestor_tags - raw_local
+                    - config.tags_exclude_from_inheritance
+                )
+
+                # -- TODO and priority (AC12–AC13) --------------------------------
+                # node.todo is "" when absent — normalize to None.
+                # node.priority is already None when absent.
+                todo = node.todo if node.todo else None
+                priority = node.priority
+
+                # -- Planning timestamps (S09b-1) ---------------------------------
+                # node.scheduled/deadline/closed return OrgDate objects that are
+                # falsy when absent (od.start is None), not Python None.
+                # All three wrapped in Timestamp for consistency (remi-org-parse
+                # had closed as bare datetime — we normalize).
+                scheduled = (
+                    _orgdate_to_timestamp(node.scheduled)
+                    if node.scheduled else None
+                )
+                deadline = (
+                    _orgdate_to_timestamp(node.deadline)
+                    if node.deadline else None
+                )
+                closed = (
+                    _orgdate_to_timestamp(node.closed)
+                    if node.closed else None
+                )
+
+                # -- Created timestamp (S09b-2) ------------------------------------
+                # Read from the configurable property (default "CREATED").
+                # node.get_property accesses only the direct PROPERTIES drawer,
+                # not children — same mechanism as :ID: and :Type:.
+                created_raw = node.get_property(config.created_property)
+                created = (
+                    _parse_timestamp_property(created_raw)
+                    if created_raw else None
+                )
+
+                # -- Archived timestamp (S09b-3) ----------------------------------
+                # ARCHIVE_TIME is written by org-archive-subtree in bare format
+                # (no delimiters).  _parse_timestamp_property handles bare → active=False.
+                archive_raw = node.get_property("ARCHIVE_TIME")
+                archived = (
+                    _parse_timestamp_property(archive_raw)
+                    if archive_raw else None
+                )
+
+                # -- Raw text and links (S06, S09a) --------------------------------
+                # Collect raw_text first, then extract links from it.
+                # Links operate on raw_text (no zone exclusion) — fix F-LK1.
+                raw_text = _collect_raw_text(node, item_map)
+
+                # -- Generic timestamps (S09b-4) --------------------------------
+                # Walk the item subtree node-by-node, extracting from heading
+                # and filtered body lines.  Excludes planning, PROPERTIES,
+                # CLOCK, and state-change lines.
+                active_ts, inactive_ts, range_ts = _collect_timestamps(
+                    node, item_map
+                )
+
+                # -- Clock entries (S09c-1) ------------------------------------
+                # Walk scaffolding to collect CLOCK entries from item scope.
+                # Uses orgparse's structured node.clock API — no regex.
+                clock = _collect_clock(node, item_map)
+
+                # -- State changes (S09c-2) ------------------------------------
+                # Extract from str(node) only — no walk scaffolding.
+                # State changes are the history of this heading's keyword,
+                # not of its children (unlike clock which aggregates time).
+                state_changes = _extract_state_changes(str(node))
+
+                # -- Body text (S09d) ------------------------------------------
+                # Collect body from item scope (walk scaffolding).  Plain
+                # format: link syntax resolved, other markup preserved.
+                # Excluded: LOGBOOK (hardcoded), config drawers/blocks.
+                body = _collect_body(
+                    node, item_map,
+                    config.exclude_drawers, config.exclude_blocks,
+                )
+
+                items.append(
+                    Item(
+                        title=node.heading,
+                        item_id=node.get_property("ID"),
+                        level=node.level,
+                        parent_item_id=_find_parent_id(node, item_map,
+                                                         parent_map),
+                        linenumber=node.linenumber,
+                        file_path=path_str,
+                        scheduled=scheduled,
+                        deadline=deadline,
+                        closed=closed,
+                        created=created,
+                        archived=archived,
+                        active_ts=active_ts,
+                        inactive_ts=inactive_ts,
+                        range_ts=range_ts,
+                        clock=clock,
+                        state_changes=state_changes,
+                        body=body,
+                        raw_text=raw_text,
+                        links=_extract_links(raw_text),
+                        properties=props,
+                        local_tags=raw_local,
+                        inherited_tags=inherited,
+                        todo=todo,
+                        priority=priority,
+                    )
+                )
+
+        return ParseResult(items=tuple(items))
+    finally:
+        # S16: always restore the original tag regex — even on exception.
+        apply_tag_patch("")

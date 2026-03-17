@@ -198,3 +198,35 @@ class TestEdgeCases:
             f.flush()
             result = parse_file(f.name, Config())
         assert result.items == ()
+
+
+# -- S16: tag regex restore ---------------------------------------------------
+
+class TestTagRegexRestore:
+    """S16: RE_HEADING_TAGS is always restored after parse_file."""
+
+    def test_tag_regex_restored_after_parse_failure(self):
+        """AC4: RE_HEADING_TAGS is restored after parse_file raises."""
+        import orgparse.node as _orgparse_node
+        original = _orgparse_node.RE_HEADING_TAGS
+
+        # extra_tag_chars="-" mutates the global regex before load().
+        # A nonexistent path causes orgparse.load to raise.
+        config = Config(extra_tag_chars="-")
+        with pytest.raises(Exception):
+            parse_file("/nonexistent/file.org", config)
+
+        # The finally block must have restored the original regex.
+        assert _orgparse_node.RE_HEADING_TAGS is original
+
+    def test_tag_regex_restored_after_successful_parse(self):
+        """AC5: RE_HEADING_TAGS is restored after successful parse_file."""
+        import orgparse.node as _orgparse_node
+        original = _orgparse_node.RE_HEADING_TAGS
+
+        # Successful parse with extra_tag_chars — regex must be
+        # restored even on the happy path.
+        config = Config(extra_tag_chars="-")
+        parse_file(TREE_BASIC, config)
+
+        assert _orgparse_node.RE_HEADING_TAGS is original

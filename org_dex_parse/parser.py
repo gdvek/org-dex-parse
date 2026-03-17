@@ -364,14 +364,16 @@ def _collect_clock(
     Uses orgparse's node.clock API (list[OrgDateClock]) — no regex needed.
     Each OrgDateClock is converted to our ClockEntry type.
 
-    Returns entries in chronological order.  The LOGBOOK drawer grows upward
-    (newest entry at top), so node.clock is in reverse-chronological order.
-    We collect all entries, then reverse the full list once at the end.
+    Returns entries in chronological order (oldest first).  Clock entries
+    may come from multiple nodes (item + scaffolding children), each in
+    reverse-chronological order (LOGBOOK grows upward).  A simple reverse()
+    would only work if all entries came from a single node; with interleaved
+    timestamps across nodes, we sort by start time instead (S15).
     """
     entries: list[ClockEntry] = []
     _collect_clock_walk(node, item_map, entries)
-    # Reverse for chronological order: oldest first.
-    entries.reverse()
+    # Sort by start time for chronological order (S15).
+    entries.sort(key=lambda e: e.start)
     return tuple(entries)
 
 

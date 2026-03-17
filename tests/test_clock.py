@@ -107,6 +107,24 @@ class TestScaffoldingWalk:
         assert clock[0].start == datetime.datetime(2026, 3, 14, 9, 0)
 
 
+# -- S15-AC1: interleaved scaffolding clocks → chronological order ----------
+
+class TestInterleavedScaffoldingOrder:
+
+    def test_interleaved_clocks_sorted_by_start(self):
+        """S15-AC1: parent [Mar10, Mar12] + scaffold [Mar11] → sorted."""
+        items = _parse()
+        clock = items["clk-008"].clock
+        assert len(clock) == 3
+        starts = [c.start for c in clock]
+        # Must be chronological regardless of collection order.
+        assert starts == [
+            datetime.datetime(2026, 3, 10, 8, 30),   # parent oldest
+            datetime.datetime(2026, 3, 11, 16, 0),    # scaffold middle
+            datetime.datetime(2026, 3, 12, 11, 0),    # parent newest
+        ]
+
+
 # -- AC5: clock timestamps not in inactive_ts (deduplication) ---------------
 
 class TestClockDeduplication:

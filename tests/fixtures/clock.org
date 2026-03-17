@@ -59,6 +59,20 @@
    CLOCK: [2026-03-14 Sat 09:00]--[2026-03-14 Sat 10:00] =>  1:00
    :END:
 
+* Item with interleaved scaffolding clocks
+  :PROPERTIES:
+  :ID: clk-008
+  :END:
+  :LOGBOOK:
+  CLOCK: [2026-03-12 Thu 11:00]--[2026-03-12 Thu 12:00] =>  1:00
+  CLOCK: [2026-03-10 Tue 08:30]--[2026-03-10 Tue 09:45] =>  1:15
+  :END:
+  Parent body.
+** Scaffold with middle clock
+   :LOGBOOK:
+   CLOCK: [2026-03-11 Wed 16:00]--[2026-03-11 Wed 17:00] =>  1:00
+   :END:
+
 * TODO Item with clock and body ts
   :PROPERTIES:
   :ID: clk-007

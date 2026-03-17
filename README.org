@@ -804,7 +804,7 @@ backend.
     logging are not supported (see [[*Limitations][Limitations]]).
 
 * Limitations
-  Known limitations of v0.1.0.
+  Known limitations of v0.1
 
 ** LOGBOOK drawer name is hardcoded
    The parser assumes =org-log-into-drawer= is =t= (Emacs default), which
@@ -812,12 +812,6 @@ backend.
    a custom drawer name (=org-log-into-drawer= set to a string) or inline
    logging (=org-log-into-drawer= set to =nil=), logging timestamps will
    leak into =inactive_ts= as false positives.
-
-** Clock entry ordering
-   =Item.clock= entries are collected from the item heading and its
-   scaffolding children, then reversed to approximate chronological order.
-   When clock entries from different nodes are temporally interleaved, the
-   ordering may not be strictly chronological.
 
 ** Tag character monkey-patch is not thread-safe
    When =Config.extra_tag_chars= is non-empty, the parser temporarily

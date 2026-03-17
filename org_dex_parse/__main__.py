@@ -310,7 +310,19 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-    config = _build_config(args)
+
+    # Catch configuration errors and present them as clean CLI messages
+    # instead of raw Python tracebacks.  Two cases:
+    # - json.JSONDecodeError: malformed JSON in --predicate flag
+    # - ValueError: invalid predicate expression (unknown operator, bad arity)
+    try:
+        config = _build_config(args)
+    except json.JSONDecodeError as exc:
+        print(f"error: invalid --predicate JSON: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+    except ValueError as exc:
+        print(f"error: invalid predicate: {exc}", file=sys.stderr)
+        raise SystemExit(1)
 
     if args.json_output:
         # JSON mode: collect all items across files, output as one array.

@@ -353,6 +353,48 @@ def test_config_json_scalar_exclude_drawers_rejected(tmp_path, org_file):
 
 
 # AC5: JSON with correct types continues to work.
+# -- S34: --predicate and ValueError error handling ----------------------------
+
+def test_predicate_malformed_json(org_file):
+    """S34-AC1: --predicate with invalid JSON → clear error, no traceback."""
+    result = _run_cli("--predicate", "not json", str(org_file), check=False)
+    assert result.returncode != 0
+    assert "predicate" in result.stderr.lower()
+    assert "Traceback" not in result.stderr
+
+
+def test_predicate_invalid_operator(org_file):
+    """S34-AC2: --predicate with unknown operator → clear error, no traceback."""
+    result = _run_cli(
+        "--predicate", '["invalid_op"]',
+        str(org_file), check=False,
+    )
+    assert result.returncode != 0
+    assert "predicate" in result.stderr.lower()
+    assert "Traceback" not in result.stderr
+
+
+def test_config_invalid_predicate(tmp_path, org_file):
+    """S34-AC3: config file with invalid predicate → clear error, no traceback."""
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"predicate": ["invalid_op"]}))
+    result = _run_cli("--config", str(config), str(org_file), check=False)
+    assert result.returncode != 0
+    assert "predicate" in result.stderr.lower()
+    assert "Traceback" not in result.stderr
+
+
+def test_predicate_valid_still_works(org_file):
+    """S34-AC4: valid --predicate continues to work (regression guard)."""
+    result = _run_cli(
+        "--predicate", '["property", "Type"]',
+        str(org_file), check=False,
+    )
+    assert result.returncode == 0
+    assert "id-001" in result.stdout
+    assert "id-002" not in result.stdout
+
+
 def test_config_json_correct_types(tmp_path):
     """S25-AC5: JSON config with all list fields as lists works fine."""
     org = _write_org(tmp_path, """\

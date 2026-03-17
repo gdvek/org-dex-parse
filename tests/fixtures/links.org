@@ -12,6 +12,10 @@
   Bare URL con punto: https://example.com/dotpage.
   Bare URL con punti multipli: https://example.com/dotpage...
   Bare URL con estensione: https://example.com/path.html
+  Bare URL Wikipedia: https://en.wikipedia.org/wiki/Foo_(bar)
+  Bare URL parentesi multiple: https://example.com/path_(a)_(b)
+  Bare URL in prosa: (see https://example.com/proseparen)
+  Bare URL paren+comma: https://example.com/parencomma),
   Link mailto: [[mailto:user@example.com][mail]]
   Link info: [[info:emacs#Top][Emacs manual]]
   Link file: [[file:/tmp/test.org][local file]]

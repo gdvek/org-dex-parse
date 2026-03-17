@@ -94,8 +94,12 @@ def _extract_links(text: str) -> tuple[Link, ...]:
             continue
 
         url = m.group()
-        # Strip trailing punctuation (AC4).
+        # Strip trailing punctuation (AC4).  For ')' we check balanced
+        # parens first — URLs like https://en.wikipedia.org/wiki/Foo_(bar)
+        # have balanced parens that are part of the URL (S33).
         while url and url[-1] in _BARE_URL_TRAILING:
+            if url[-1] == ")" and url.count("(") >= url.count(")"):
+                break  # balanced parens — part of the URL
             url = url[:-1]
 
         # Bare URLs are stored as-is (complete URL).

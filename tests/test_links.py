@@ -114,6 +114,38 @@ class TestBareUrlPunctuation:
                       if lk.target == "https://example.com/path.html"]
         assert len(html_links) == 1
 
+    def test_balanced_parens_preserved(self):
+        """S33-AC1: balanced parens in URL preserved (Wikipedia pattern)."""
+        items = _parse()
+        links = items["lnk-001"].links
+        wiki = [lk for lk in links
+                if lk.target == "https://en.wikipedia.org/wiki/Foo_(bar)"]
+        assert len(wiki) == 1
+
+    def test_multiple_balanced_parens_preserved(self):
+        """S33-AC2: multiple balanced paren groups preserved."""
+        items = _parse()
+        links = items["lnk-001"].links
+        multi = [lk for lk in links
+                 if lk.target == "https://example.com/path_(a)_(b)"]
+        assert len(multi) == 1
+
+    def test_unbalanced_paren_in_prose_stripped(self):
+        """S33-AC3: unbalanced ')' from surrounding prose stripped."""
+        items = _parse()
+        links = items["lnk-001"].links
+        prose = [lk for lk in links
+                 if lk.target == "https://example.com/proseparen"]
+        assert len(prose) == 1
+
+    def test_trailing_paren_comma_stripped(self):
+        """S33-AC4: trailing '),\' both stripped (paren unbalanced after comma strip)."""
+        items = _parse()
+        links = items["lnk-001"].links
+        pc = [lk for lk in links
+              if lk.target == "https://example.com/parencomma"]
+        assert len(pc) == 1
+
 
 # -- AC5: deduplication (bare URL inside org link) ----------------------------
 
@@ -262,6 +294,8 @@ class TestLinkOrder:
         # https (example.com), id (abc-123), fuzzy,
         # https (bare), https (page), https (paren),
         # https (dotpage x2), https (path.html),
+        # https (wikipedia), https (path_(a)_(b)),
+        # https (proseparen), https (parencomma),
         # mailto, info, file, elisp, doi, shell
         assert targets_in_order == [
             "https://example.com", "id:abc-123", "Heading: with colon",
@@ -269,6 +303,10 @@ class TestLinkOrder:
             "https://example.com/page", "https://example.com/paren",
             "https://example.com/dotpage", "https://example.com/dotpage",
             "https://example.com/path.html",
+            "https://en.wikipedia.org/wiki/Foo_(bar)",
+            "https://example.com/path_(a)_(b)",
+            "https://example.com/proseparen",
+            "https://example.com/parencomma",
             "mailto:user@example.com", "info:emacs#Top",
             "file:/tmp/test.org", 'elisp:(message "hi")',
             "doi:10.1000/test", "shell:ls -la",
@@ -296,9 +334,9 @@ class TestNoLinks:
 class TestLinkCount:
 
     def test_lnk001_link_count(self):
-        """lnk-001 has exactly 15 links (all types in fixture)."""
+        """lnk-001 has exactly 19 links (all types in fixture)."""
         items = _parse()
-        assert len(items["lnk-001"].links) == 15
+        assert len(items["lnk-001"].links) == 19
 
     def test_lnk003_link_count(self):
         """lnk-003 has 2 links: org + separate bare (no overlap)."""

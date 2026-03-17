@@ -13,6 +13,9 @@ Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
   the item node and its scaffolding children
 - Bare URL trailing dot: =https://example.com/page.= in prose now strips
   the final period (previously included it in the link target)
+- Bare URL balanced parentheses: URLs like
+  =https://en.wikipedia.org/wiki/Foo_(bar)= are now preserved intact
+  (previously the closing paren was stripped, breaking the link)
 - CLI: =--todos "TODO, NEXT,"= now strips whitespace and drops empty tokens
   (previously produced =" NEXT"= and =""=)
 - CLI: JSON config with scalar where list expected (e.g. ="todos": "LOGBOOK"=)

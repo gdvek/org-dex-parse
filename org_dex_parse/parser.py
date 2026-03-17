@@ -313,12 +313,13 @@ _RE_TIMESTAMP_PROPERTY = re.compile(
     r'\s*(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})'  # YYYY-MM-DD
     r'(?:\s+\w+)?'                           # optional day-of-week (ignored)
     r'(?:\s+(?P<hour>\d{2}):(?P<minute>\d{2}))?'  # optional HH:MM
-    r'\s*(?:[>\]])?'                         # optional closing delimiter
-    # Note: we don't enforce that the closing delimiter matches the opening
-    # one (<> vs []).  Well-formed org files never have mismatched pairs,
-    # so the added complexity isn't warranted.
+    r'\s*(?P<close>[>\]])?'                  # optional closing delimiter (S18)
     r'\s*$'
 )
+
+# Expected closing delimiter for each opening one.  Mismatched pairs
+# (e.g. <...] or [...>) indicate corrupt input → None.  (S18)
+_EXPECTED_CLOSE: dict[str | None, str | None] = {"<": ">", "[": "]", None: None}
 
 
 def _parse_timestamp_property(value: str) -> Timestamp | None:
@@ -336,17 +337,25 @@ def _parse_timestamp_property(value: str) -> Timestamp | None:
     if m is None:
         return None
 
+    # S18: reject mismatched delimiters (<...] or [...>).
+    if m.group("close") != _EXPECTED_CLOSE.get(m.group("open")):
+        return None
+
     year = int(m.group("year"))
     month = int(m.group("month"))
     day = int(m.group("day"))
 
-    # Time component determines date vs datetime (AC5/AC6).
-    if m.group("hour") is not None:
-        date = datetime.datetime(year, month, day,
-                                 int(m.group("hour")),
-                                 int(m.group("minute")))
-    else:
-        date = datetime.date(year, month, day)
+    # S18: impossible dates (e.g. Feb 31) raise ValueError/OverflowError
+    # from datetime — degrade to None, consistent with regex-no-match path.
+    try:
+        if m.group("hour") is not None:
+            date = datetime.datetime(year, month, day,
+                                     int(m.group("hour")),
+                                     int(m.group("minute")))
+        else:
+            date = datetime.date(year, month, day)
+    except (ValueError, OverflowError):
+        return None
 
     # Active only when explicitly delimited with <> (AC7).
     active = m.group("open") == "<"

@@ -85,3 +85,27 @@
   :ID: ts-014
   :ARCHIVE_TIME: archived sometime ago
   :END:
+
+* Impossible date
+  :PROPERTIES:
+  :ID: ts-015
+  :CREATED: <2026-02-31 Tue>
+  :END:
+
+* Impossible date with time
+  :PROPERTIES:
+  :ID: ts-016
+  :CREATED: <2026-02-31 Tue 10:00>
+  :END:
+
+* Mismatch open angle close bracket
+  :PROPERTIES:
+  :ID: ts-017
+  :CREATED: <2026-03-01 Sun]
+  :END:
+
+* Mismatch open bracket close angle
+  :PROPERTIES:
+  :ID: ts-018
+  :CREATED: [2026-03-01 Sun>
+  :END:

@@ -8,6 +8,10 @@ Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
 * [0.1.1] — 2026-03-16
 
 ** Fixed
+- Timestamp property robustness: impossible dates (e.g. Feb 31) in =CREATED=
+  or =ARCHIVE_TIME= properties now return =None= instead of crashing with
+  =ValueError=; mismatched delimiters (e.g. =<2026-03-01]​=) are also
+  rejected as malformed
 - Tag regex restore: =parse_file= now restores orgparse's global
   =RE_HEADING_TAGS= regex after every call (via =try/finally=), preventing
   a failed parse from contaminating subsequent calls in the same process

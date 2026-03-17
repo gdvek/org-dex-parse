@@ -180,3 +180,29 @@ class TestCreatedRepeater:
         """AC11: bare CREATED → repeater=None."""
         items = _parse()
         assert items["ts-009"].created.repeater is None
+
+
+# -- S18: malformed robustness -----------------------------------------------
+
+class TestCreatedMalformedS18:
+    """S18: impossible dates and mismatched delimiters → None, no crash."""
+
+    def test_impossible_date_returns_none(self):
+        """S18-AC1: impossible date (Feb 31) → created is None."""
+        items = _parse()
+        assert items["ts-015"].created is None
+
+    def test_impossible_date_with_time_returns_none(self):
+        """S18-AC2: impossible date with time (Feb 31 10:00) → created is None."""
+        items = _parse()
+        assert items["ts-016"].created is None
+
+    def test_mismatch_open_angle_close_bracket(self):
+        """S18-AC3: <...] mismatch → created is None."""
+        items = _parse()
+        assert items["ts-017"].created is None
+
+    def test_mismatch_open_bracket_close_angle(self):
+        """S18-AC4: [...> mismatch → created is None."""
+        items = _parse()
+        assert items["ts-018"].created is None

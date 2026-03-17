@@ -238,6 +238,22 @@ def test_config_file_missing(org_file):
     assert "nonexistent" in result.stderr.lower() or "not found" in result.stderr.lower()
 
 
+# -- S32: malformed JSON in config file ----------------------------------------
+
+def test_config_malformed_json(tmp_path, org_file):
+    """S32-AC1/AC2/AC3: malformed JSON config produces a clear error, no traceback."""
+    config = tmp_path / "bad.json"
+    config.write_text('{"predicate": [}')  # invalid JSON
+    result = _run_cli("--config", str(config), str(org_file), check=False)
+    assert result.returncode != 0
+    # AC1: error message mentions invalid JSON.
+    assert "invalid json" in result.stderr.lower()
+    # AC2: error message includes the file path.
+    assert "bad.json" in result.stderr
+    # AC3: no Python traceback visible.
+    assert "Traceback" not in result.stderr
+
+
 # -- AC13: examples/config.json exists and is valid ----------------------------
 
 def test_example_config_valid():

@@ -14,6 +14,8 @@ Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
   (previously produced =" NEXT"= and =""=)
 - CLI: JSON config with scalar where list expected (e.g. ="todos": "LOGBOOK"=)
   now fails with a clear error instead of silently iterating the string
+- CLI: malformed JSON in config file now produces a user-friendly error
+  instead of a Python traceback
 
 ** Changed
 - CLI rewritten as generic public tool (=python -m org_dex_parse=)

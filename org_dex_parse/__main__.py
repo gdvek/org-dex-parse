@@ -63,7 +63,12 @@ def _load_config_file(path: str) -> dict:
         print(f"error: config file not found: {path}", file=sys.stderr)
         raise SystemExit(1)
 
-    data = json.loads(text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        print(f"error: invalid JSON in config file {path}: {exc}",
+              file=sys.stderr)
+        raise SystemExit(1)
     if not isinstance(data, dict):
         print(f"error: config file must be a JSON object, got {type(data).__name__}",
               file=sys.stderr)

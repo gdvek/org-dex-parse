@@ -7,6 +7,8 @@ Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
 
 * [Unreleased]
 
+* [0.1.3] — 2026-03-22
+
 ** Added
 - L12 post-parse predicate check (S19g): headings matching the item predicate
   but missing =:ID:= now produce a =ParseWarning= in =ParseResult.warnings=.

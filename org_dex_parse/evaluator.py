@@ -48,6 +48,14 @@ def compile_predicate(
     operator = expr[0]
     args = expr[1:]
 
+    # S35: operator must be a string (e.g. "property", "and").  Non-string
+    # values like lists or ints would cause TypeError on dict lookup or
+    # produce confusing "unknown operator" messages.
+    if not isinstance(operator, str):
+        raise ValueError(
+            f"operator must be a string, got {type(operator).__name__}: {operator!r}"
+        )
+
     if operator not in _OPERATORS:
         raise ValueError(
             f"unknown operator {operator!r}"
@@ -75,6 +83,13 @@ def _compile_property(op: str, args: list) -> Callable[[Any], bool]:
             f" got {len(args)}: {args!r}"
         )
     prop_name = args[0]
+    # S35: property name must be a string.  Non-string values (int, list)
+    # would be silently accepted at compile time and fail at runtime.
+    if not isinstance(prop_name, str):
+        raise ValueError(
+            f"property name must be a string, got {type(prop_name).__name__}:"
+            f" {prop_name!r}"
+        )
     return lambda node: node.get_property(prop_name) is not None
 
 

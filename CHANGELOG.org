@@ -14,6 +14,18 @@ Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
   the check to avoid noise).  New types: =ParseWarning= dataclass,
   =Config.predicate_is_default= flag.
 
+** Fixed
+- Input validation: non-string operators in predicates (e.g. a nested list
+  where a string was expected) now raise =ValueError= instead of =TypeError=
+- Input validation: non-string property names in predicates (e.g.
+  =["property", 1]=) now raise =ValueError= at compile time instead of being
+  silently accepted
+- Input validation: non-string elements in config collection fields (e.g.
+  =exclude_drawers: [1]=) now raise =ValueError= instead of =AttributeError=
+- CLI: error message for invalid configuration generalized from "invalid
+  predicate" to "invalid configuration" to cover non-predicate validation
+  errors
+
 * [0.1.2] — 2026-03-17
 
 ** Fixed

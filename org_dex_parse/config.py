@@ -99,6 +99,33 @@ class Config:
                 f" got {type(pred).__name__}: {pred!r}"
             )
 
+        # -- S35: element type validation before normalization ----------------
+        # Validate that all elements in collection fields and scalar string
+        # fields are actually strings.  Without this, .lower()/.upper() calls
+        # below would raise AttributeError on non-string values — an opaque
+        # error instead of a clear validation message.
+        _str_collection_fields = {
+            "todos": self.todos,
+            "dones": self.dones,
+            "tags_exclude_from_inheritance": self.tags_exclude_from_inheritance,
+            "exclude_drawers": self.exclude_drawers,
+            "exclude_blocks": self.exclude_blocks,
+            "exclude_properties": self.exclude_properties,
+        }
+        for field_name, collection in _str_collection_fields.items():
+            for elem in collection:
+                if not isinstance(elem, str):
+                    raise ValueError(
+                        f"all elements of {field_name!r} must be strings,"
+                        f" got {type(elem).__name__}: {elem!r}"
+                    )
+        if not isinstance(self.created_property, str):
+            raise ValueError(
+                f"created_property must be a string,"
+                f" got {type(self.created_property).__name__}:"
+                f" {self.created_property!r}"
+            )
+
         # -- Exclusion normalization -----------------------------------------
         object.__setattr__(
             self,

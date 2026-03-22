@@ -233,3 +233,44 @@ class TestErrors:
     def test_empty_list(self):
         with pytest.raises(ValueError, match="empty"):
             compile_predicate([])
+
+    # -- S35: operator must be a string ------------------------------------------
+
+    def test_operator_not_string_list(self):
+        """S35-AC1: list as operator → ValueError, not TypeError."""
+        with pytest.raises(ValueError, match="operator must be a string"):
+            compile_predicate([["property", "Type"]])
+
+    def test_operator_not_string_int(self):
+        """S35-AC1: int as operator → ValueError."""
+        with pytest.raises(ValueError, match="operator must be a string"):
+            compile_predicate([42, "Type"])
+
+    # -- S35: property name must be a string -------------------------------------
+
+    def test_property_name_not_string_int(self):
+        """S35-AC2: int as property name → ValueError."""
+        with pytest.raises(ValueError, match="property name must be a string"):
+            compile_predicate(["property", 1])
+
+    def test_property_name_not_string_list(self):
+        """S35-AC2: list as property name → ValueError."""
+        with pytest.raises(ValueError, match="property name must be a string"):
+            compile_predicate(["property", ["x"]])
+
+    # -- S35: nested invalid sub-expressions -------------------------------------
+
+    def test_nested_invalid_operator(self):
+        """S35-AC3: invalid operator inside and → ValueError."""
+        with pytest.raises(ValueError, match="operator must be a string"):
+            compile_predicate(["and", [42, "x"]])
+
+    def test_nested_invalid_property_name(self):
+        """S35-AC3: invalid property name inside not → ValueError."""
+        with pytest.raises(ValueError, match="property name must be a string"):
+            compile_predicate(["not", ["property", 1]])
+
+    def test_deep_nested_invalid(self):
+        """S35-AC3: invalid operator deep in nested expression → ValueError."""
+        with pytest.raises(ValueError, match="operator must be a string"):
+            compile_predicate(["or", ["and", [1]]])

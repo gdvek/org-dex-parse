@@ -96,6 +96,23 @@ def _load_config_file(path: str) -> dict:
             )
             raise SystemExit(1)
 
+    # S35: validate that list elements are strings.  The container type
+    # check above catches "todos": "string", but not "todos": ["TODO", 1].
+    _LIST_OF_STRINGS_FIELDS = {
+        "todos", "dones", "tags_exclude_from_inheritance",
+        "exclude_drawers", "exclude_blocks", "exclude_properties",
+    }
+    for key in _LIST_OF_STRINGS_FIELDS:
+        if key in data:
+            for elem in data[key]:
+                if not isinstance(elem, str):
+                    print(
+                        f"error: all elements of config field \"{key}\" must be"
+                        f" strings, got {type(elem).__name__}: {elem!r}",
+                        file=sys.stderr,
+                    )
+                    raise SystemExit(1)
+
     return data
 
 
@@ -312,16 +329,17 @@ def main() -> None:
     args = parser.parse_args()
 
     # Catch configuration errors and present them as clean CLI messages
-    # instead of raw Python tracebacks.  Two cases:
+    # instead of raw Python tracebacks.  Three cases:
     # - json.JSONDecodeError: malformed JSON in --predicate flag
-    # - ValueError: invalid predicate expression (unknown operator, bad arity)
+    # - ValueError: invalid predicate (unknown operator, bad arity, bad types)
+    #   or invalid config field values (non-string elements)
     try:
         config = _build_config(args)
     except json.JSONDecodeError as exc:
         print(f"error: invalid --predicate JSON: {exc}", file=sys.stderr)
         raise SystemExit(1)
     except ValueError as exc:
-        print(f"error: invalid predicate: {exc}", file=sys.stderr)
+        print(f"error: invalid configuration: {exc}", file=sys.stderr)
         raise SystemExit(1)
 
     if args.json_output:

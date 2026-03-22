@@ -128,3 +128,45 @@ class TestConfigExtraTagChars:
     def test_custom_chars(self):
         config = Config(extra_tag_chars="%#")
         assert config.extra_tag_chars == "%#"
+
+
+# --- S35: element type validation ---
+
+
+class TestConfigElementTypeValidation:
+    """S35: non-string elements in collection fields raise ValueError."""
+
+    def test_exclude_drawers_int_element(self):
+        """S35-AC4: int in exclude_drawers → ValueError."""
+        with pytest.raises(ValueError, match="exclude_drawers"):
+            Config(exclude_drawers=frozenset({1}))
+
+    def test_exclude_blocks_int_element(self):
+        """S35-AC4: int in exclude_blocks → ValueError."""
+        with pytest.raises(ValueError, match="exclude_blocks"):
+            Config(exclude_blocks=frozenset({1}))
+
+    def test_exclude_properties_int_element(self):
+        """S35-AC4: int in exclude_properties → ValueError."""
+        with pytest.raises(ValueError, match="exclude_properties"):
+            Config(exclude_properties=frozenset({1}))
+
+    def test_todos_int_element(self):
+        """S35-AC5: int in todos → ValueError."""
+        with pytest.raises(ValueError, match="todos"):
+            Config(todos=("TODO", 1))
+
+    def test_dones_int_element(self):
+        """S35-AC5: int in dones → ValueError."""
+        with pytest.raises(ValueError, match="dones"):
+            Config(dones=("DONE", 1))
+
+    def test_tags_exclude_int_element(self):
+        """S35: int in tags_exclude_from_inheritance → ValueError."""
+        with pytest.raises(ValueError, match="tags_exclude_from_inheritance"):
+            Config(tags_exclude_from_inheritance=frozenset({1}))
+
+    def test_created_property_int(self):
+        """S35: int as created_property → ValueError."""
+        with pytest.raises(ValueError, match="created_property"):
+            Config(created_property=1)

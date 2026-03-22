@@ -370,7 +370,8 @@ def test_predicate_invalid_operator(org_file):
         str(org_file), check=False,
     )
     assert result.returncode != 0
-    assert "predicate" in result.stderr.lower()
+    assert "invalid" in result.stderr.lower()
+    assert "unknown operator" in result.stderr.lower()
     assert "Traceback" not in result.stderr
 
 
@@ -380,7 +381,8 @@ def test_config_invalid_predicate(tmp_path, org_file):
     config.write_text(json.dumps({"predicate": ["invalid_op"]}))
     result = _run_cli("--config", str(config), str(org_file), check=False)
     assert result.returncode != 0
-    assert "predicate" in result.stderr.lower()
+    assert "invalid" in result.stderr.lower()
+    assert "unknown operator" in result.stderr.lower()
     assert "Traceback" not in result.stderr
 
 
@@ -416,3 +418,51 @@ def test_config_json_correct_types(tmp_path):
     data = json.loads(result.stdout)
     assert len(data) == 1
     assert data[0]["todo"] == "TODO"
+
+
+# -- S35: structural validation of JSON config elements ------------------------
+
+def test_config_exclude_drawers_int_element(tmp_path, org_file):
+    """S35-AC4: JSON exclude_drawers with int element → clear error, no traceback."""
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"exclude_drawers": [1]}))
+    result = _run_cli("--config", str(config), str(org_file), check=False)
+    assert result.returncode != 0
+    assert "exclude_drawers" in result.stderr
+    assert "string" in result.stderr.lower()
+    assert "Traceback" not in result.stderr
+
+
+def test_config_todos_int_element(tmp_path, org_file):
+    """S35-AC5: JSON todos with int element → clear error, no traceback."""
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"todos": ["TODO", 1]}))
+    result = _run_cli("--config", str(config), str(org_file), check=False)
+    assert result.returncode != 0
+    assert "todos" in result.stderr
+    assert "string" in result.stderr.lower()
+    assert "Traceback" not in result.stderr
+
+
+# -- S35: CLI predicate structural validation ----------------------------------
+
+def test_predicate_operator_not_string(org_file):
+    """S35-AC6: --predicate with list operator → clear error, no traceback."""
+    result = _run_cli(
+        "--predicate", '[["property", "Type"]]',
+        str(org_file), check=False,
+    )
+    assert result.returncode != 0
+    assert "operator must be a string" in result.stderr.lower()
+    assert "Traceback" not in result.stderr
+
+
+def test_predicate_property_name_int(org_file):
+    """S35-AC6: --predicate with int property name → clear error, no traceback."""
+    result = _run_cli(
+        "--predicate", '["property", 1]',
+        str(org_file), check=False,
+    )
+    assert result.returncode != 0
+    assert "property name must be a string" in result.stderr.lower()
+    assert "Traceback" not in result.stderr

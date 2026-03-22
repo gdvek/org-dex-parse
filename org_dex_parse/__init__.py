@@ -1,6 +1,6 @@
 """org-dex-parse: parse org-mode files into structured data."""
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 from org_dex_parse.config import Config
 from org_dex_parse.evaluator import compile_predicate

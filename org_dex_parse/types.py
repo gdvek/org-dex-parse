@@ -153,6 +153,31 @@ class Item:
 
 
 @dataclass(frozen=True)
+class ParseWarning:
+    """A non-critical issue found during parsing.
+
+    L12 (S19g) detects headings that match the item predicate but lack
+    ``:ID:`` — "quasi-items" the user likely forgot to assign an ID to.
+    This check requires the AST and compiled predicate, so it lives in
+    the parser rather than the pre-parse linter.
+
+    Same shape as org-dex's ``LintProblem`` but independent type — the
+    parser package does not depend on the daemon package.  The pipeline
+    converts at the boundary (anti-corruption layer).
+
+    :arg line: 1-based line number of the heading.
+    :arg code: Stable check code (e.g. ``"L12"``).
+    :arg message: Human-readable description.
+    :arg severity: ``"error"`` or ``"warning"``.
+    """
+
+    line: int
+    code: str
+    message: str
+    severity: str
+
+
+@dataclass(frozen=True)
 class ParseResult:
     """Result of parsing an org file.
 
@@ -160,6 +185,8 @@ class ParseResult:
     callers.
 
     :arg items: Parsed items in file order.
+    :arg warnings: Non-critical issues found during parsing (e.g. L12).
     """
 
     items: tuple[Item, ...] = ()
+    warnings: tuple[ParseWarning, ...] = ()

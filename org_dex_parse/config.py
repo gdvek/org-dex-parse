@@ -61,6 +61,12 @@ class Config:
     created_property: str = "CREATED"
     extra_tag_chars: str = ""
 
+    # S19g: True when item_predicate was None (default — any heading with
+    # :ID:).  Set in __post_init__ before compilation erases the distinction.
+    # parse_file checks this to skip L12 when no explicit predicate is
+    # configured (flagging every heading without :ID: would be pure noise).
+    predicate_is_default: bool = field(init=False, default=False)
+
     def __post_init__(self) -> None:
         """Normalize fields on frozen dataclass.
 
@@ -74,6 +80,14 @@ class Config:
         """
         # -- Predicate normalization (S08) -----------------------------------
         pred = self.item_predicate
+        # S19g: record whether predicate is the default before compilation.
+        # Two paths to default: Config() uses _DEFAULT_PREDICATE sentinel,
+        # Config(item_predicate=None) passes None.  Both mean "no explicit
+        # predicate" — L12 should not fire.
+        object.__setattr__(
+            self, "predicate_is_default",
+            pred is None or pred is _DEFAULT_PREDICATE,
+        )
         if isinstance(pred, list) or pred is None:
             from .evaluator import compile_predicate
             object.__setattr__(

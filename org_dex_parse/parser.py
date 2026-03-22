@@ -23,7 +23,8 @@ from ._orgparse_compat import (
 )
 
 from .types import (
-    ClockEntry, Item, Link, ParseResult, Range, StateChange, Timestamp,
+    ClockEntry, Item, Link, ParseResult, ParseWarning, Range, StateChange,
+    Timestamp,
 )
 
 # -- Link extraction (S09a) ---------------------------------------------------
@@ -853,6 +854,12 @@ def parse_file(path: str, config: Config) -> ParseResult:
         item_map = _build_item_map(root, predicate)
 
         items: list[Item] = []
+        warnings: list[ParseWarning] = []
+
+        # S19g: L12 only fires when an explicit predicate is configured.
+        # With default predicate (None → always_true), every heading
+        # without :ID: would be flagged — pure noise.
+        check_l12 = not config.predicate_is_default
 
         # root[1:] iterates ALL nodes in document order, skipping the
         # virtual root.  No recursion needed — orgparse provides a flat
@@ -988,7 +995,25 @@ def parse_file(path: str, config: Config) -> ParseResult:
                     )
                 )
 
-        return ParseResult(items=tuple(items))
+            # S19g: L12 — heading matches predicate but has no :ID:.
+            # The node was not an item (item_map says False).  Two reasons:
+            # (a) no :ID: at all, or (b) has :ID: but predicate rejected it.
+            # L12 targets (a): no :ID: but predicate would accept it.
+            # We only check when an explicit predicate is configured
+            # (check_l12 flag) to avoid noise with default predicate.
+            elif check_l12 and node.get_property("ID") is None:
+                if predicate(node):
+                    warnings.append(ParseWarning(
+                        line=node.linenumber,
+                        code="L12",
+                        message=(
+                            f"Heading matches item predicate but has no "
+                            f":ID: — \"{node.heading}\""
+                        ),
+                        severity="warning",
+                    ))
+
+        return ParseResult(items=tuple(items), warnings=tuple(warnings))
     finally:
         # S16: always restore the original tag regex — even on exception.
         apply_tag_patch("")

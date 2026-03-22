@@ -5,6 +5,15 @@ All notable changes to org-dex-parse are documented in this file.
 Format follows [[https://keepachangelog.com/en/1.1.0/][Keep a Changelog]].
 Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
 
+* [Unreleased]
+
+** Added
+- L12 post-parse predicate check (S19g): headings matching the item predicate
+  but missing =:ID:= now produce a =ParseWarning= in =ParseResult.warnings=.
+  Only fires when an explicit predicate is configured (default predicate skips
+  the check to avoid noise).  New types: =ParseWarning= dataclass,
+  =Config.predicate_is_default= flag.
+
 * [0.1.2] — 2026-03-17
 
 ** Fixed

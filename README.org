@@ -1,4 +1,4 @@
-#+title: org-dex-parse
+#+title: org-cube-parse
 #+author: gdvek
 
 Extract structured data from org-mode files.  Point it at an =.org= file,
@@ -6,14 +6,14 @@ get back Python objects — titles, timestamps, links, tags, clock entries,
 properties, and more — ready to query, store, or pipe into whatever
 you're building.
 
-Built for [[https://github.com/gdvek/org-dex][org-dex]], usable standalone.  Uses [[https://github.com/karlicoss/orgparse][orgparse]] as the parsing
+Built for [[https://github.com/gdvek/org-cube][org-cube]], usable standalone.  Uses [[https://github.com/karlicoss/orgparse][orgparse]] as the parsing
 backend.
 
 * Try it
 ** From the command line
 
   #+begin_src sh
-  pip install org-dex-parse   # Python >= 3.11
+  pip install org-cube-parse   # Python >= 3.11
   #+end_src
 
   Use one of your own org files, or create a test file:
@@ -34,7 +34,7 @@ backend.
   #+end_example
 
   #+begin_src sh
-  python -m org_dex_parse example.org
+  python -m org_cube_parse example.org
   #+end_src
 
   Output:
@@ -55,7 +55,7 @@ backend.
   A ready-made config file is included for common setups:
 
   #+begin_src sh
-  python -m org_dex_parse --config examples/config.json example.org
+  python -m org_cube_parse --config examples/config.json example.org
   #+end_src
 
   It covers TODO keywords, drawer filtering, and item selection rules
@@ -65,7 +65,7 @@ backend.
 ** From Python
 
   #+begin_src python
-  from org_dex_parse import parse_file, Config
+  from org_cube_parse import parse_file, Config
 
   result = parse_file("notes.org", Config())
 
@@ -101,7 +101,7 @@ backend.
                       orgparse
                     (syntax tree)
                          |
-                   org-dex-parse
+                   org-cube-parse
                   (semantic layer)
                          |
                     Item stream
@@ -110,17 +110,17 @@ backend.
                          |
           +--------------+--------------+
           v              v              v
-     org-dex       custom indexers   data pipelines
+     org-cube       custom indexers   data pipelines
      (DB + UI)     (knowledge graphs)(analytics)
   #+end_example
 
-  orgparse handles the org-mode grammar.  org-dex-parse handles item
+  orgparse handles the org-mode grammar.  org-cube-parse handles item
   discrimination, field extraction, and content filtering.
 
 * Installation
 
   #+begin_src sh
-  pip install org-dex-parse
+  pip install org-cube-parse
   #+end_src
 
   Requires Python >= 3.11.  Single dependency: =orgparse>=0.4,<0.5=.
@@ -571,7 +571,7 @@ backend.
   =Config()= (any heading with =:ID:= is an item).
 
   #+begin_src python
-  from org_dex_parse import Config
+  from org_cube_parse import Config
 
   config = Config(
       # Which headings with :ID: are items (default: all of them)
@@ -711,34 +711,34 @@ backend.
 
 * CLI reference
   All =Config= fields are available as CLI flags.  Run
-  =python -m org_dex_parse --help= for the full list.
+  =python -m org_cube_parse --help= for the full list.
 
   #+begin_src sh
   # Default: any heading with :ID: is an item
-  python -m org_dex_parse file.org
+  python -m org_cube_parse file.org
 
   # With a predicate
-  python -m org_dex_parse --predicate '["property", "Type"]' file.org
+  python -m org_cube_parse --predicate '["property", "Type"]' file.org
 
   # With TODO keywords
-  python -m org_dex_parse --todos TODO,NEXT,DOING --dones DONE,CANCELED file.org
+  python -m org_cube_parse --todos TODO,NEXT,DOING --dones DONE,CANCELED file.org
 
   # From a config file (all fields optional)
-  python -m org_dex_parse --config myconfig.json file.org
+  python -m org_cube_parse --config myconfig.json file.org
 
   # JSON output
-  python -m org_dex_parse --json file.org
+  python -m org_cube_parse --json file.org
 
   # Verbosity: -v adds body, -vv adds raw_text
-  python -m org_dex_parse -v file.org
-  python -m org_dex_parse --json -vv file.org
+  python -m org_cube_parse -v file.org
+  python -m org_cube_parse --json -vv file.org
   #+end_src
 
   An example config file is included in =examples/config.json= — it
   documents all available fields and can be used directly:
 
   #+begin_src sh
-  python -m org_dex_parse --config examples/config.json file.org
+  python -m org_cube_parse --config examples/config.json file.org
   #+end_src
 
   *Precedence:* CLI flags override config file values, which override
@@ -780,7 +780,7 @@ backend.
   | Lines           | 135,511 |
   | Extraction time | 2.5 s   |
 
-  Breakdown: orgparse loads the syntax tree in ~1.5 s, org-dex-parse
+  Breakdown: orgparse loads the syntax tree in ~1.5 s, org-cube-parse
   walks the tree and extracts all fields in ~1.0 s.  The extraction
   phase uses O(n) pre-computed caches for parent lookup and tag
   inheritance.
@@ -843,8 +843,8 @@ backend.
 
 * Development
   #+begin_src sh
-  git clone https://github.com/gdvek/org-dex-parse.git
-  cd org-dex-parse
+  git clone https://github.com/gdvek/org-cube-parse.git
+  cd org-cube-parse
   python -m venv .venv
   source .venv/bin/activate
   pip install -e ".[dev]"

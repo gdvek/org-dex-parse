@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from org_dex_parse import Config, Item, ParseResult, parse_file
+from org_cube_parse import Config, Item, ParseResult, parse_file
 
 FIXTURES = Path(__file__).parent / "fixtures"
 BODY_ORG = FIXTURES / "body.org"

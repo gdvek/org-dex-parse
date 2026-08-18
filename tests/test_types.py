@@ -1,4 +1,4 @@
-"""Tests for org_dex_parse.types — data structures.
+"""Tests for org_cube_parse.types — data structures.
 
 Covers AC1 (public imports), AC2 (frozen), AC3 (Item minimal construction),
 AC4 (field types), AC7 (ParseResult).
@@ -8,7 +8,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from org_dex_parse import (
+from org_cube_parse import (
     ClockEntry,
     Config,
     Item,
@@ -24,7 +24,7 @@ from org_dex_parse import (
 
 
 class TestPublicImports:
-    """All 8 public types are importable from org_dex_parse."""
+    """All 8 public types are importable from org_cube_parse."""
 
     def test_all_types_importable(self):
         for cls in (

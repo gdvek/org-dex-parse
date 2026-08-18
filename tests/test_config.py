@@ -1,4 +1,4 @@
-"""Tests for org_dex_parse.config — parser configuration.
+"""Tests for org_cube_parse.config — parser configuration.
 
 Covers AC5 (item_predicate), AC6 (case normalization).
 """
@@ -6,7 +6,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from org_dex_parse import Config
+from org_cube_parse import Config
 
 
 # --- AC5: item_predicate ---

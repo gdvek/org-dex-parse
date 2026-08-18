@@ -13,6 +13,6 @@ __pycache__/
 *.egg-info/
 dist/
 
-# Project docs (symlinks to org-dex-parse-project, tracked separately)
+# Project docs (symlinks to org-cube-parse-project, tracked separately)
 project
 CLAUDE.md

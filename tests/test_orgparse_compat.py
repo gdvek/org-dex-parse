@@ -14,7 +14,7 @@ from pathlib import Path
 import orgparse
 from orgparse.date import OrgDate, OrgDateClock
 
-from org_dex_parse._orgparse_compat import (
+from org_cube_parse._orgparse_compat import (
     get_repeater, get_clock_duration, get_body_lines,
 )
 

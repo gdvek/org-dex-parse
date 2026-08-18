@@ -7,7 +7,7 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-from org_dex_parse import Config, Item, ParseResult, Timestamp, parse_file
+from org_cube_parse import Config, Item, ParseResult, Timestamp, parse_file
 
 FIXTURES = Path(__file__).parent / "fixtures"
 TS_ORG = FIXTURES / "timestamps_dedicated.org"

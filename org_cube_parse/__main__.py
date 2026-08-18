@@ -1,15 +1,15 @@
-"""CLI for org-dex-parse: python -m org_dex_parse FILE [FILE ...]
+"""CLI for org-cube-parse: python -m org_cube_parse FILE [FILE ...]
 
 Parses org files and prints each item with its populated fields.
 Uses bare configuration by default (any heading with :ID: is an item).
 
 Usage:
-    python -m org_dex_parse file.org
-    python -m org_dex_parse --json file.org
-    python -m org_dex_parse --config myconfig.json file.org
-    python -m org_dex_parse --predicate '["property", "Type"]' file.org
-    python -m org_dex_parse --todos TODO,NEXT --dones DONE file.org
-    python -m org_dex_parse --json -vv file.org   # full output with raw_text
+    python -m org_cube_parse file.org
+    python -m org_cube_parse --json file.org
+    python -m org_cube_parse --config myconfig.json file.org
+    python -m org_cube_parse --predicate '["property", "Type"]' file.org
+    python -m org_cube_parse --todos TODO,NEXT --dones DONE file.org
+    python -m org_cube_parse --json -vv file.org   # full output with raw_text
 """
 from __future__ import annotations
 
@@ -184,7 +184,7 @@ def _build_config(args: argparse.Namespace) -> Config:
 
 
 # -- JSON serialization --------------------------------------------------------
-# Custom encoder for Item dataclasses and org-dex-parse types.
+# Custom encoder for Item dataclasses and org-cube-parse types.
 
 class _ItemEncoder(json.JSONEncoder):
     """JSON encoder for Item and its nested types."""
@@ -269,7 +269,7 @@ def _print_item(item, verbosity: int) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="python -m org_dex_parse",
+        prog="python -m org_cube_parse",
         description="Parse org files and show items (bare config by default).",
     )
     parser.add_argument("files", nargs="+", help="Org files to parse")

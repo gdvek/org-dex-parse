@@ -1,11 +1,11 @@
-"""Tests for org_dex_parse.evaluator — s-expression predicate compiler.
+"""Tests for org_cube_parse.evaluator — s-expression predicate compiler.
 
 Covers AC1 (compile_predicate returns callable), AC2 (operators: property,
 not, and, or, None), AC3 (error handling), AC7 (dispatch table structure).
 """
 import pytest
 
-from org_dex_parse.evaluator import compile_predicate
+from org_cube_parse.evaluator import compile_predicate
 
 
 # -- Fake node for pure-logic testing ----------------------------------------
@@ -157,7 +157,7 @@ class TestOr:
 
 
 class TestComposition:
-    """Nested expressions — the patterns org-dex actually uses."""
+    """Nested expressions — the patterns org-cube actually uses."""
 
     def test_and_property_not_property(self):
         """(and (property "Type") (not (property "ARCHIVE_TIME")))"""

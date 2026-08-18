@@ -13,7 +13,7 @@ _DEFAULT_PREDICATE: Callable[[Any], bool] = lambda h: True
 
 @dataclass(frozen=True)
 class Config:
-    """Configuration for org-dex-parse.
+    """Configuration for org-cube-parse.
 
     The caller constructs this with TODO keywords, tag rules, and
     exclusion lists matching their org-mode environment.

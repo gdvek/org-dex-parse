@@ -7,8 +7,8 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-from org_dex_parse import Config, Item, ParseResult, parse_file
-from org_dex_parse.types import StateChange
+from org_cube_parse import Config, Item, ParseResult, parse_file
+from org_cube_parse.types import StateChange
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SC_ORG = FIXTURES / "state_changes.org"

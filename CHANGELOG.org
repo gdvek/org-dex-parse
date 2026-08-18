@@ -1,11 +1,48 @@
 #+title: Changelog
 
-All notable changes to org-dex-parse are documented in this file.
+All notable changes to org-cube-parse are documented in this file.
+
+The project was published as *org-dex-parse* through 0.1.3.  Entries below
+=[0.1.0]= describe that predecessor and keep its name: they are a record of
+what happened, not a pointer to anything installable today.
 
 Format follows [[https://keepachangelog.com/en/1.1.0/][Keep a Changelog]].
 Versioning follows [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
 
 * [Unreleased]
+
+* [0.1.0] — 2026-08-18
+
+** Changed
+- *Renamed from =org-dex-parse= to =org-cube-parse=.*  The Emacs side of the
+  project collided with an existing third-party package named =org-dex=, so
+  the whole family was renamed rather than fight over a feature name.
+- The import namespace is now =org_cube_parse=.  The distribution name is
+  =org-cube-parse=.  Both changed; they are separate surfaces.
+
+  | Was                          | Is now                        |
+  |------------------------------+-------------------------------|
+  | ~pip install org-dex-parse~  | ~pip install org-cube-parse~  |
+  | ~import org_dex_parse~       | ~import org_cube_parse~       |
+  | ~python -m org_dex_parse~    | ~python -m org_cube_parse~    |
+
+- Version restarts at =0.1.0=.  The new name is a new public line, not a
+  continuation: pretending otherwise would imply an upgrade path that does
+  not exist.
+
+** Removed
+- No compatibility shim.  =org_dex_parse= is not importable from this
+  distribution, and no bridge release is published under the old name.  A
+  shim would reintroduce exactly the collision this rename removes.
+
+** Migration
+  There is nothing to migrate beyond the two names above.  The API, the data
+  types and the CLI behaviour are unchanged: =Item=, =Config=, =ParseResult=
+  and the rest keep their names and their fields.
+
+  =org-dex-parse= stays on PyPI, archived.  It receives no further releases,
+  and its existing releases are not yanked -- keeping the name occupied stops
+  anyone else from reusing it.
 
 * [0.1.3] — 2026-03-22
 

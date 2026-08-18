@@ -1,6 +1,6 @@
 """Playground script to verify README examples against actual parser output.
 
-Run from the org-dex-parse directory:
+Run from the org-cube-parse directory:
     .venv/bin/python tests/readme_playground.py
 """
 from __future__ import annotations
@@ -8,7 +8,7 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-from org_dex_parse import Config, parse_file
+from org_cube_parse import Config, parse_file
 
 FIXTURES = Path(__file__).parent / "fixtures" / "readme"
 

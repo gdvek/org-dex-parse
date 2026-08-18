@@ -6,7 +6,7 @@ minus sub-items.  Uses the raw_text.org fixture.
 """
 from pathlib import Path
 
-from org_dex_parse import Config, parse_file
+from org_cube_parse import Config, parse_file
 
 FIXTURE = str(Path(__file__).parent / "fixtures" / "raw_text.org")
 

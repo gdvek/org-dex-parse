@@ -16,7 +16,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from org_dex_parse import Config, ParseResult, ParseWarning, parse_file
+from org_cube_parse import Config, ParseResult, ParseWarning, parse_file
 
 
 # -- AC1: ParseWarning dataclass ----------------------------------------------

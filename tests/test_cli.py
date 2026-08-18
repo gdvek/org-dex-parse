@@ -27,7 +27,7 @@ def _write_org(tmp_path: Path, content: str, name: str = "test.org") -> Path:
 def _run_cli(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     """Run the CLI and return the result."""
     return subprocess.run(
-        [sys.executable, "-m", "org_dex_parse", *args],
+        [sys.executable, "-m", "org_cube_parse", *args],
         capture_output=True,
         text=True,
         check=check,
@@ -198,7 +198,7 @@ def test_verbosity_json_vv(org_file):
 
 def test_no_remi_config():
     """AC9: no trace of REMI_CONFIG in __main__.py."""
-    main_path = Path(__file__).parent.parent / "org_dex_parse" / "__main__.py"
+    main_path = Path(__file__).parent.parent / "org_cube_parse" / "__main__.py"
     source = main_path.read_text()
     assert "REMI_CONFIG" not in source
     assert "_REMI_" not in source

@@ -161,7 +161,7 @@ class ParseWarning:
     This check requires the AST and compiled predicate, so it lives in
     the parser rather than the pre-parse linter.
 
-    Same shape as org-dex's ``LintProblem`` but independent type — the
+    Same shape as org-cube's ``LintProblem`` but independent type — the
     parser package does not depend on the daemon package.  The pipeline
     converts at the boundary (anti-corruption layer).
 
